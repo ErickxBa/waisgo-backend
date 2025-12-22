@@ -3,9 +3,17 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../users/Models/users.entity';
+import { APP_GUARD } from '@nestjs/core';
+import { JweAuthGuard } from './Guards/jwe-auth.guard';
 
 @Module({
-  providers: [AuthService],
+  providers: [
+    AuthService,
+    {
+      provide: APP_GUARD,
+      useClass: JweAuthGuard,
+    },
+  ],
   controllers: [AuthController],
   imports: [TypeOrmModule.forFeature([User])],
 })
