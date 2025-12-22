@@ -18,6 +18,8 @@ export class AuthService {
   private readonly logger = new Logger('AuthService');
   private readonly secretKey: Uint8Array;
   private readonly JWT_EXPIRES_IN: string;
+  private readonly MAX_FAILED_ATTEMPTS = 5;
+  private readonly BLOCK_TIME_MINUTES = 15;
 
   constructor(
     @InjectRepository(User)
@@ -36,11 +38,17 @@ export class AuthService {
 
       const user = await this.usersRepo.findOne({
         where: { email },
-        relations: ['credential'], // aunque tengas eager, es explícito
+        relations: ['credential'],
       });
 
       if (!user || !user.credential) {
         throw new UnauthorizedException('Credenciales inválidas');
+      }
+
+      if (user.bloqueadoHasta && user.bloqueadoHasta > new Date()) {
+        throw new UnauthorizedException(
+          'Cuenta temporalmente bloqueada. Intente más tarde.',
+        );
       }
 
       const passwordValid = await bcrypt.compare(
@@ -49,8 +57,11 @@ export class AuthService {
       );
 
       if (!passwordValid) {
+        await this.handleFailedAttempt(user);
         throw new UnauthorizedException('Credenciales inválidas');
       }
+
+      await this.resetFailedAttempts(user);
 
       const token = await new EncryptJWT({
         role: user.rol,
@@ -79,5 +90,35 @@ export class AuthService {
         'Unexpected error, check server logs',
       );
     }
+  }
+
+  private async handleFailedAttempt(user: User) {
+    const credential = user.credential;
+
+    credential.failedAttempts += 1;
+    credential.lastFailedAttempt = new Date();
+
+    // 🔒 ¿Excedió el máximo?
+    if (credential.failedAttempts >= this.MAX_FAILED_ATTEMPTS) {
+      const bloqueadoHasta = new Date();
+      bloqueadoHasta.setMinutes(
+        bloqueadoHasta.getMinutes() + this.BLOCK_TIME_MINUTES,
+      );
+
+      user.bloqueadoHasta = bloqueadoHasta;
+
+      // Reset para el próximo ciclo
+      credential.failedAttempts = 0;
+    }
+
+    await this.usersRepo.save(user);
+  }
+
+  private async resetFailedAttempts(user: User) {
+    user.credential.failedAttempts = 0;
+    user.credential.lastFailedAttempt = null;
+    user.bloqueadoHasta = null;
+
+    await this.usersRepo.save(user);
   }
 }
