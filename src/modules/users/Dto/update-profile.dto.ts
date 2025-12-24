@@ -1,6 +1,13 @@
 import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateProfileDto {
+  @ApiPropertyOptional({
+    description: 'Nuevo nombre del usuario (solo letras y espacios)',
+    example: 'Juan Carlos',
+    minLength: 3,
+    maxLength: 15,
+  })
   @IsOptional()
   @IsString()
   @Length(3, 15)
@@ -9,6 +16,12 @@ export class UpdateProfileDto {
   })
   nombre?: string;
 
+  @ApiPropertyOptional({
+    description: 'Nuevo apellido del usuario (solo letras y espacios)',
+    example: 'Pérez García',
+    minLength: 3,
+    maxLength: 15,
+  })
   @IsOptional()
   @IsString()
   @Length(3, 15)
@@ -17,6 +30,10 @@ export class UpdateProfileDto {
   })
   apellido?: string;
 
+  @ApiPropertyOptional({
+    description: 'Nuevo número de celular ecuatoriano (formato: 09XXXXXXXX)',
+    example: '0987654321',
+  })
   @IsOptional()
   @IsString()
   @Matches(/^09\d{8}$/, {

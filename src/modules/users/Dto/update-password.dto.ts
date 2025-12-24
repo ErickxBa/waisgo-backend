@@ -1,9 +1,21 @@
 import { IsString, Length, Matches } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdatePasswordDto {
+  @ApiProperty({
+    description: 'Contraseña actual del usuario',
+    example: 'MiContraseña.123',
+  })
   @IsString()
   currentPassword: string;
 
+  @ApiProperty({
+    description:
+      'Nueva contraseña (mínimo 7 caracteres, debe incluir mayúsculas, minúsculas, números y caracteres especiales)',
+    example: 'NuevaSegura.456',
+    minLength: 7,
+    maxLength: 20,
+  })
   @IsString()
   @Length(7, 20)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[/*.@-_#]).+$/, {

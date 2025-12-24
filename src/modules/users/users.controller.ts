@@ -8,6 +8,12 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { Public } from '../common/Decorators/public.decorator';
 import { UpdateProfileDto } from './Dto/update-profile.dto';
@@ -17,6 +23,7 @@ import { RolUsuarioEnum } from './Enums/users-roles.enum';
 import type { JwtPayload } from '../common/types/jwt-payload.type';
 import { UpdatePasswordDto } from './Dto/update-password.dto';
 
+@ApiTags('Users')
 @Controller('users')
 export class UsersController {
   private readonly uuidPipe = new ParseUUIDPipe({ version: '4' });
@@ -29,6 +36,16 @@ export class UsersController {
 
   @Public()
   @Post('register')
+  @ApiOperation({ summary: 'Registrar un nuevo usuario' })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Usuario registrado exitosamente. Se enviará un correo de verificación.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o correo ya registrado.',
+  })
   async register(@Body() dto: RegisterUserDto) {
     return this.usersService.register(dto);
   }
@@ -36,6 +53,24 @@ export class UsersController {
   @Roles(RolUsuarioEnum.PASAJERO)
   @Patch('profile')
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Actualizar perfil del usuario verificado' })
+  @ApiResponse({
+    status: 200,
+    description: 'Perfil actualizado correctamente.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Usuario no verificado o datos inválidos.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Token no proporcionado o inválido.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Acceso denegado. Solo usuarios con rol PASAJERO.',
+  })
   async updateProfile(@User() user: JwtPayload, @Body() dto: UpdateProfileDto) {
     const safeUserId = await this.validateUserId(user.id);
     return await this.usersService.updateProfile(safeUserId, dto);
@@ -48,6 +83,26 @@ export class UsersController {
   )
   @Patch('change-password')
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Cambiar contraseña del usuario autenticado' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Contraseña actualizada correctamente. Todas las sesiones anteriores serán revocadas.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Contraseña actual incorrecta o la nueva contraseña no cumple los requisitos.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Token no proporcionado o inválido.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Acceso denegado para su rol.',
+  })
   async changePassword(
     @User() user: JwtPayload,
     @Body() dto: UpdatePasswordDto,
