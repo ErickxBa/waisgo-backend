@@ -10,7 +10,7 @@ export const envSchema = Joi.object({
   DB_HOST: Joi.string().hostname().required(),
   DB_PORT: Joi.number().port().default(5432),
   DB_USERNAME: Joi.string().min(3).required(),
-  DB_PASSWORD: Joi.string().min(8).required(),
+  DB_PASSWORD: Joi.string().min(3).required(),
   DB_NAME: Joi.string().min(3).required(),
 
   JWT_SECRET: Joi.string().length(32).required(),
@@ -28,7 +28,7 @@ export const envSchema = Joi.object({
   MAIL_PORT: Joi.number().port().default(587),
   MAIL_USER: Joi.string().email().required(),
   MAIL_PASS: Joi.string().min(8).required(),
-  MAIL_FROM: Joi.string().email().required(),
+  MAIL_FROM: Joi.string().required(),
 
   CLEANUP_UNVERIFIED_DAYS: Joi.number().min(1).max(30).default(7),
 });
