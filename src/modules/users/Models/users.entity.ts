@@ -44,6 +44,12 @@ export class User {
   })
   estadoVerificacion: EstadoVerificacionEnum;
 
+  @Column({ default: false })
+  isDeleted: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt: Date | null;
+
   @Column({ type: 'timestamp', nullable: true })
   bloqueadoHasta: Date | null;
 

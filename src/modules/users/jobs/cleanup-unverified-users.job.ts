@@ -27,10 +27,17 @@ export class CleanupUnverifiedUsersJob {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - days);
 
-      const result = await this.usersRepo.delete({
-        estadoVerificacion: EstadoVerificacionEnum.NO_VERIFICADO,
-        createdAt: LessThan(cutoff),
-      });
+      const result = await this.usersRepo.update(
+        {
+          estadoVerificacion: EstadoVerificacionEnum.NO_VERIFICADO,
+          createdAt: LessThan(cutoff),
+          isDeleted: false,
+        },
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+      );
 
       if (result.affected && result.affected > 0) {
         this.logger.log(

@@ -109,7 +109,13 @@ export class UsersService {
   }
 
   private async findOneOrFail(options: FindOneOptions<User>): Promise<User> {
-    const user = await this.usersRepo.findOne(options);
+    const user = await this.usersRepo.findOne({
+      ...options,
+      where: {
+        ...(options.where as object),
+        isDeleted: false,
+      },
+    });
     if (!user) throw new BadRequestException('Usuario no encontrado');
     return user;
   }
