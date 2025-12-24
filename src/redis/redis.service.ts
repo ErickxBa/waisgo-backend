@@ -36,4 +36,50 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   getClient(): Redis {
     return this.client;
   }
+
+  async set(key: string, value: string | number, ttl?: number): Promise<void> {
+    if (ttl) {
+      await this.client.set(key, value, 'EX', ttl);
+    } else {
+      await this.client.set(key, value);
+    }
+  }
+
+  async get(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
+  async del(...keys: string[]): Promise<void> {
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+
+  async incr(key: string): Promise<number> {
+    return this.client.incr(key);
+  }
+
+  async isTokenRevoked(jti: string): Promise<boolean> {
+    const result = await this.client.get(`revoke:jti:${jti}`);
+    return result !== null;
+  }
+
+  async saveOtpSession(
+    otpKey: string,
+    otpValue: string,
+    otpTtl: number,
+    attemptsKey: string,
+    resendKey: string,
+    resendCount: number,
+  ): Promise<void> {
+    const pipeline = this.client.pipeline();
+
+    pipeline.set(otpKey, otpValue, 'EX', otpTtl);
+
+    pipeline.set(attemptsKey, 0, 'EX', otpTtl);
+
+    pipeline.set(resendKey, resendCount + 1, 'EX', 24 * 60 * 60);
+
+    await pipeline.exec();
+  }
 }

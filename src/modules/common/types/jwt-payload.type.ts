@@ -1,7 +1,12 @@
-export interface JwtPayload {
+import { RolUsuarioEnum } from 'src/modules/users/Enums/users-roles.enum';
+
+export type JwtPayload = {
   id: string;
-  role: string;
-  isVerified: boolean;
-  alias: string;
+  sub: string;
   jti: string;
-}
+  exp: number;
+  iat: number;
+  role: RolUsuarioEnum;
+  alias: string;
+  isVerified: boolean;
+};
