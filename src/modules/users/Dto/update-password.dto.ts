@@ -8,7 +8,9 @@ export class UpdatePasswordDto {
     example: 'MiContraseña.123',
   })
   @IsString()
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   currentPassword: string;
 
   @ApiProperty({
@@ -20,7 +22,9 @@ export class UpdatePasswordDto {
   })
   @IsString()
   @Length(7, 20)
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[/*.@-_#]).+$/, {
     message:
       'La contraseña debe tener mayúsculas, minúsculas, números y caracteres especiales',

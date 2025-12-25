@@ -69,7 +69,7 @@ export class OtpService {
 
       throw new BadRequestException('OTP incorrecto');
     }
-    
+
     await this.redisService.del(otpKey, attemptsKey);
   }
 }

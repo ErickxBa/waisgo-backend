@@ -11,7 +11,9 @@ export class ConfirmOtpDto {
   })
   @IsString({ message: 'El código debe ser una cadena de texto' })
   @Length(6, 6, { message: 'El código debe tener exactamente 6 dígitos' })
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^\d{6}$/, { message: 'El código debe contener solo números' })
   code: string;
 }

@@ -11,7 +11,7 @@ import { join } from 'path';
   imports: [
     AuditModule,
     MailerModule.forRootAsync({
-      useFactory: async (config: ConfigService) => ({
+      useFactory: (config: ConfigService) => ({
         transport: {
           host: config.get('MAIL_HOST'),
           port: Number(config.get('MAIL_PORT')),

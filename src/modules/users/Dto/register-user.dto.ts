@@ -15,7 +15,9 @@ export class RegisterUserDto {
   })
   @IsNotEmpty()
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toLowerCase().trim() : value,
+  )
   @Matches(/^[\w.+-]+@epn\.edu\.ec$/)
   email: string;
 
@@ -26,7 +28,9 @@ export class RegisterUserDto {
     maxLength: 15,
   })
   @IsNotEmpty()
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^[A-Za-záéíóúÁÉÍÓÚñÑ ]+$/)
   @Length(3, 15)
   nombre: string;
@@ -38,7 +42,9 @@ export class RegisterUserDto {
     maxLength: 15,
   })
   @IsNotEmpty()
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^[A-Za-záéíóúÁÉÍÓÚñÑ ]+$/)
   @Length(3, 15)
   apellido: string;
@@ -48,7 +54,9 @@ export class RegisterUserDto {
     example: '0987654321',
   })
   @IsNotEmpty()
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^09\d{8}$/)
   celular: string;
 
@@ -62,7 +70,9 @@ export class RegisterUserDto {
   @IsNotEmpty()
   @IsString()
   @Length(7, 20)
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/, {
     message:
       'La contraseña debe contener al menos una letra mayúscula, una minúscula, un número y un carácter especial.',

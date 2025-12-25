@@ -49,7 +49,10 @@ export class CleanupUnverifiedUsersJob {
         );
       }
     } catch (error) {
-      this.logger.error('Error durante el Cron Job de limpieza', error.stack);
+      this.logger.error(
+        'Error durante el Cron Job de limpieza',
+        error instanceof Error ? error.stack : undefined,
+      );
     }
   }
 }

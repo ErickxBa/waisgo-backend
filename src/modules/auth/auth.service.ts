@@ -129,7 +129,9 @@ export class AuthService {
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
 
-      this.logger.error(`${error.name}: ${error.message}`);
+      this.logger.error(
+        `${error instanceof Error ? error.name : 'Error'}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+      );
       throw new InternalServerErrorException('Error inesperado en login');
     }
   }

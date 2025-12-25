@@ -8,6 +8,8 @@ export class ForgotPasswordDto {
     example: 'usuario@epn.edu.ec',
   })
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toLowerCase().trim() : value,
+  )
   email: string;
 }

@@ -8,6 +8,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import { RolUsuarioEnum } from '../../users/Enums/users-roles.enum';
 import { ROLES_KEY } from 'src/modules/common/Decorators/roles.decorator';
+import type { Request } from 'express';
+import type { JwtPayload } from 'src/modules/common/types/jwt-payload.type';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -25,10 +27,10 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as { role?: RolUsuarioEnum };
+    const request = context.switchToHttp().getRequest<Request>();
+    const user = request.user as JwtPayload | undefined;
 
-    if (!user?.role) {
+    if (!user || !user.role) {
       this.logger.warn(
         'Usuario sin rol identificado intentó acceder a un recurso protegido por roles.',
       );

@@ -141,8 +141,17 @@ export class UsersService {
     return user;
   }
 
-  private handleDBExceptions(error: any) {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
+  private handleDBExceptions(error: unknown) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === '23505'
+    ) {
+      throw new BadRequestException(
+        'detail' in error ? String(error.detail) : 'Duplicate entry',
+      );
+    }
     this.logger.error(error);
     throw new InternalServerErrorException(
       'Error inesperado, revise los logs del servidor',
