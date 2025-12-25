@@ -19,6 +19,8 @@ import { UsersModule } from './modules/users/users.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { RedisModule } from './redis/redis.module';
 import { envSchema } from './config/env.schema';
+import { BusinessModule } from './modules/business/business.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { envSchema } from './config/env.schema';
     BookingsModule,
     PaymentsModule,
     AdminModule,
+    BusinessModule,
+    RatingsModule,
   ],
   providers: [
     {

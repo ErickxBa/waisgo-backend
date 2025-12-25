@@ -8,6 +8,8 @@ import { JweAuthGuard } from './Guards/jwe-auth.guard';
 import { RolesGuard } from './Guards/roles.guard';
 import { AuditModule } from '../audit/audit.module';
 import { MailModule } from '../mail/mail.module';
+import { AuthUser } from './Models/auth-user.entity';
+import { Credential } from './Models/credential.entity';
 
 @Module({
   providers: [
@@ -22,6 +24,10 @@ import { MailModule } from '../mail/mail.module';
     },
   ],
   controllers: [AuthController],
-  imports: [TypeOrmModule.forFeature([User]), AuditModule, MailModule],
+  imports: [
+    TypeOrmModule.forFeature([AuthUser, Credential, User]),
+    AuditModule,
+    MailModule,
+  ],
 })
 export class AuthModule {}
