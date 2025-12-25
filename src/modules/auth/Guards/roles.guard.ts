@@ -9,7 +9,6 @@ import { Reflector } from '@nestjs/core';
 import { RolUsuarioEnum } from '../../users/Enums/users-roles.enum';
 import { ROLES_KEY } from 'src/modules/common/Decorators/roles.decorator';
 import type { Request } from 'express';
-import type { JwtPayload } from 'src/modules/common/types/jwt-payload.type';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -28,7 +27,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user as JwtPayload | undefined;
+    const user = request.user;
 
     if (!user || !user.role) {
       this.logger.warn(

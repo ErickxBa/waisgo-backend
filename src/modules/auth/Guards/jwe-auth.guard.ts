@@ -11,6 +11,7 @@ import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from 'src/modules/common/Decorators/public.decorator';
 import { RedisService } from 'src/redis/redis.service';
 import type { Request } from 'express';
+import { RolUsuarioEnum } from 'src/modules/users/Enums/users-roles.enum';
 
 @Injectable()
 export class JweAuthGuard implements CanActivate {
@@ -95,7 +96,7 @@ export class JweAuthGuard implements CanActivate {
       request.user = {
         id: String(payload.sub),
         sub: String(payload.sub),
-        role: payload.role as string,
+        role: payload.role as RolUsuarioEnum,
         isVerified: Boolean(payload.isVerified),
         alias: String(payload.alias),
         jti: String(payload.jti),
