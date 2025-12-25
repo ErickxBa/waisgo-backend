@@ -129,17 +129,14 @@ export class AuthService {
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
 
-      this.logger.error(`${error.name}: ${error.message}`);
+      this.logger.error(
+        `${error instanceof Error ? error.name : 'Error'}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+      );
       throw new InternalServerErrorException('Error inesperado en login');
     }
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {
-    const genericResponse = {
-      message:
-        'Si el correo existe, se enviará un enlace para restablecer la contraseña',
-    };
-
     const user = await this.usersRepo.findOne({
       where: { email: email.toLowerCase().trim() },
     });
@@ -148,7 +145,7 @@ export class AuthService {
       !user ||
       user.estadoVerificacion !== EstadoVerificacionEnum.VERIFICADO
     ) {
-      return genericResponse;
+      return { message: 'Usuario no encontrado o no verificado' };
     }
 
     const limitKey = `${this.RESET_LIMIT_PREFIX}${user.id}`;
@@ -184,7 +181,7 @@ export class AuthService {
       resetUrl: resetUrl,
     });
 
-    return genericResponse;
+    return { message: 'Instrucciones de restablecimiento enviadas al correo' };
   }
 
   async resetPassword(

@@ -15,7 +15,9 @@ export class LoginDto {
   })
   @IsNotEmpty()
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toLowerCase().trim() : value,
+  )
   @Matches(/^[\w.+-]+@epn\.edu\.ec$/)
   email: string;
 
@@ -28,6 +30,8 @@ export class LoginDto {
   @IsNotEmpty()
   @IsString()
   @Length(7, 20)
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   password: string;
 }

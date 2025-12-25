@@ -8,4 +8,4 @@ import { AuditLog } from './Models/audit-log.entity';
   providers: [AuditService],
   exports: [AuditService],
 })
-export class AuditModule {} 
+export class AuditModule {}

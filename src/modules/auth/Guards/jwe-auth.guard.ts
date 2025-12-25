@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from 'src/modules/common/Decorators/public.decorator';
 import { RedisService } from 'src/redis/redis.service';
+import type { Request } from 'express';
+import { RolUsuarioEnum } from 'src/modules/users/Enums/users-roles.enum';
 
 @Injectable()
 export class JweAuthGuard implements CanActivate {
@@ -39,10 +41,14 @@ export class JweAuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request>();
     const authHeader = request.headers['authorization'];
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (
+      !authHeader ||
+      typeof authHeader !== 'string' ||
+      !authHeader.startsWith('Bearer ')
+    ) {
       throw new UnauthorizedException('Token requerido');
     }
 
@@ -67,14 +73,16 @@ export class JweAuthGuard implements CanActivate {
       }
 
       if (payload.jti) {
-        const isRevoked = await this.redisService.isTokenRevoked(payload.jti);
+        const isRevoked = await this.redisService.isTokenRevoked(
+          String(payload.jti),
+        );
         if (isRevoked) {
           throw new UnauthorizedException('Token revocado');
         }
       }
 
       const revocationTimestamp = await this.redisService.get(
-        `revoke:user:${payload.sub}`,
+        `revoke:user:${String(payload.sub)}`,
       );
 
       if (revocationTimestamp) {
@@ -86,21 +94,23 @@ export class JweAuthGuard implements CanActivate {
       }
 
       request.user = {
-        id: payload.sub,
-        sub: payload.sub,
-        role: payload.role,
-        isVerified: payload.isVerified,
-        alias: payload.alias,
-        jti: payload.jti,
-        exp: payload.exp,
-        iat: payload.iat,
+        id: String(payload.sub),
+        sub: String(payload.sub),
+        role: payload.role as RolUsuarioEnum,
+        isVerified: Boolean(payload.isVerified),
+        alias: String(payload.alias),
+        jti: String(payload.jti),
+        exp: Number(payload.exp),
+        iat: Number(payload.iat),
       };
 
       return true;
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
 
-      this.logger.error(`Auth Error: ${error.message}`);
+      this.logger.error(
+        `Token inválido: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+      );
       throw new UnauthorizedException('Token inválido o expirado');
     }
   }

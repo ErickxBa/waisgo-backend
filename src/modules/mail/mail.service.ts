@@ -75,8 +75,8 @@ export class MailService {
       this.logger.log(`Correo '${params.template}' enviado a ${params.to}`);
     } catch (error) {
       this.logger.error(
-        `Error enviando correo '${params.template}' a ${params.to}: ${error.message}`,
-        error.stack,
+        `Error enviando correo '${params.template}' a ${params.to}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        error instanceof Error ? error.stack : undefined,
       );
       throw new InternalServerErrorException(
         'Error al enviar el correo electrónico. Por favor intente más tarde.',

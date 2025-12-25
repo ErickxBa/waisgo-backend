@@ -12,7 +12,9 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @Length(3, 15)
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/, {
     message: 'El nombre solo puede contener letras',
   })
@@ -27,7 +29,9 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @Length(3, 15)
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/, {
     message: 'El apellido solo puede contener letras',
   })
@@ -39,7 +43,9 @@ export class UpdateProfileDto {
   })
   @IsOptional()
   @IsString()
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Matches(/^09\d{8}$/, {
     message: 'Celular inválido',
   })

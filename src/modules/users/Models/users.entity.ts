@@ -10,7 +10,7 @@ import { Credential } from './credentials.entity';
 import { RolUsuarioEnum } from '../Enums/users-roles.enum';
 import { EstadoVerificacionEnum } from '../Enums/estado-ver.enum';
 
-@Entity('users')
+@Entity({ name: 'legacy_users', schema: 'auth' })
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -43,6 +43,12 @@ export class User {
     default: EstadoVerificacionEnum.NO_VERIFICADO,
   })
   estadoVerificacion: EstadoVerificacionEnum;
+
+  @Column({ default: false })
+  isDeleted: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
   bloqueadoHasta: Date | null;

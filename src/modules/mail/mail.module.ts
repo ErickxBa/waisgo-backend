@@ -11,11 +11,11 @@ import { join } from 'path';
   imports: [
     AuditModule,
     MailerModule.forRootAsync({
-      useFactory: async (config: ConfigService) => ({
+      useFactory: (config: ConfigService) => ({
         transport: {
           host: config.get('MAIL_HOST'),
           port: Number(config.get('MAIL_PORT')),
-          secure: false,
+          secure: Number(config.get('MAIL_PORT')) === 465,
           auth: {
             user: config.get('MAIL_USER'),
             pass: config.get('MAIL_PASS'),

@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOneOptions } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { User } from './Models/users.entity';
 import { RegisterUserDto } from './Dto/register-user.dto';
 import { RolUsuarioEnum } from './Enums/users-roles.enum';
@@ -27,7 +28,7 @@ export class UsersService {
 
       const user = this.usersRepo.create({
         ...userDetails,
-        alias: `Pasajero${Math.floor(1000 + Math.random() * 9000)}`,
+        alias: `Pasajero${randomBytes(4).toString('hex').toUpperCase()}`,
         rol: RolUsuarioEnum.USER,
         estadoVerificacion: EstadoVerificacionEnum.NO_VERIFICADO,
         credential: {
@@ -109,7 +110,13 @@ export class UsersService {
   }
 
   private async findOneOrFail(options: FindOneOptions<User>): Promise<User> {
-    const user = await this.usersRepo.findOne(options);
+    const user = await this.usersRepo.findOne({
+      ...options,
+      where: {
+        ...(options.where as object),
+        isDeleted: false,
+      },
+    });
     if (!user) throw new BadRequestException('Usuario no encontrado');
     return user;
   }
@@ -134,8 +141,17 @@ export class UsersService {
     return user;
   }
 
-  private handleDBExceptions(error: any) {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
+  private handleDBExceptions(error: unknown) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === '23505'
+    ) {
+      throw new BadRequestException(
+        'detail' in error ? String(error.detail) : 'Duplicate entry',
+      );
+    }
     this.logger.error(error);
     throw new InternalServerErrorException(
       'Error inesperado, revise los logs del servidor',
