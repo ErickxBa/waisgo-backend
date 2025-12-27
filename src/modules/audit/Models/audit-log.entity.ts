@@ -3,27 +3,44 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
+import { AuditAction } from '../Enums/audit-actions.enum';
+import { AuditResult } from '../Enums/audit-result.enum';
 
-@Entity('audit_logs')
+@Entity({ schema: 'audit', name: 'audit_logs' })
+@Index('IDX_audit_logs_action', ['action'])
+@Index('IDX_audit_logs_user_id', ['userId'])
+@Index('IDX_audit_logs_created_at', ['createdAt'])
+@Index('IDX_audit_logs_result', ['result'])
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  action: string; // LOGIN_SUCCESS, LOGIN_FAILED, etc.
+  @Column({
+    type: 'enum',
+    enum: AuditAction,
+  })
+  action: AuditAction;
 
-  @Column({ nullable: true })
-  userId: string;
+  @Column({ type: 'uuid', nullable: true })
+  userId: string | null;
 
-  @Column({ nullable: true })
-  ipAddress: string;
+  @Column({ type: 'varchar', length: 45, nullable: true })
+  ipAddress: string | null;
 
-  @Column({ nullable: true })
-  userAgent: string;
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  userAgent: string | null;
 
-  @Column({ nullable: true })
-  result: string; // SUCCESS / FAILED / BLOCKED
+  @Column({
+    type: 'enum',
+    enum: AuditResult,
+    nullable: true,
+  })
+  result: AuditResult | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, unknown> | null;
 
   @CreateDateColumn()
   createdAt: Date;
