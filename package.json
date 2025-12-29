@@ -49,6 +49,8 @@
     "jose": "^4.15.5",
     "minio": "^8.0.6",
     "nodemailer": "^6.9.13",
+    "oci-objectstorage": "^2.122.2",
+    "oci-sdk": "^2.122.2",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
