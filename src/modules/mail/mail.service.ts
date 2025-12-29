@@ -92,6 +92,10 @@ export class MailService {
     context: Record<string, unknown>;
   }): Promise<void> {
     try {
+      this.logger.log(
+        `Intentando enviar correo '${params.template}' a ${params.to}`,
+      );
+
       await this.mailerService.sendMail({
         to: params.to,
         subject: params.subject,
@@ -99,7 +103,7 @@ export class MailService {
         context: params.context,
       });
 
-      this.logger.log(`Correo '${params.template}' enviado a ${params.to}`);
+      this.logger.log(`Correo '${params.template}' enviado exitosamente a ${params.to}`);
 
       await this.auditService.logEvent({
         action: AuditAction.EMAIL_SENT,

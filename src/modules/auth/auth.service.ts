@@ -140,9 +140,18 @@ export class AuthService {
 
       this.logger.log(`User registered: ${userId}`);
 
+      // Construir respuesta con datos del usuario
       return {
         success: true,
-        userId,
+        user: {
+          id: userId,
+          email: normalizedEmail,
+          nombre,
+          apellido,
+          celular,
+          rol: RolUsuarioEnum.PASAJERO,
+          estadoVerificacion: EstadoVerificacionEnum.NO_VERIFICADO,
+        },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -217,9 +226,29 @@ export class AuthService {
         result: AuditResult.SUCCESS,
       });
 
+      // Obtener datos del perfil de usuario desde BusinessUser
+      const businessUserRepo = this.dataSource.getRepository('BusinessUser');
+      const businessUser = await businessUserRepo.findOne({
+        where: { id: user.id },
+        relations: ['profile'],
+      });
+
+      // Construir respuesta del usuario
+      const userData = {
+        id: user.id,
+        email: user.email,
+        rol: user.rol,
+        estadoVerificacion: user.estadoVerificacion,
+        nombre: businessUser?.profile?.nombre || '',
+        apellido: businessUser?.profile?.apellido || '',
+        celular: businessUser?.profile?.celular || '',
+        alias: businessUser?.alias || '',
+      };
+
       return {
-        token,
+        access_token: token,
         expiresIn: 28800, // 8h en segundos
+        user: userData,
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;

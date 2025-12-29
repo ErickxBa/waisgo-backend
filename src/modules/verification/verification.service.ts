@@ -57,16 +57,21 @@ export class VerificationService {
     // Validar UUID antes de cualquier operación
     this.validateUserId(userId);
 
+    this.logger.log(`Iniciando envío de verificación para usuario: ${userId}`);
+
     const user = await this.authService.findForVerification(userId);
 
     if (user.estadoVerificacion === EstadoVerificacionEnum.VERIFICADO) {
+      this.logger.warn(`Usuario ${userId} ya está verificado`);
       throw new BadRequestException(
         ErrorMessages.VERIFICATION.ALREADY_VERIFIED,
       );
     }
 
+    this.logger.log(`Generando OTP para usuario: ${userId}`);
     const otp = await this.otpService.sendOtp(user.id);
 
+    this.logger.log(`OTP generado exitosamente. Obteniendo nombre para usuario: ${userId}`);
     const displayName = await this.businessService.getDisplayName(user.id);
 
     const mailOptions: SendVerificationEmailOptions = {
@@ -75,6 +80,10 @@ export class VerificationService {
       code: otp.code,
       expiresInMinutes: otp.expiresInMinutes,
     };
+
+    this.logger.log(
+      `Preparado para enviar correo de verificación a ${user.email} con código ${otp.code}`,
+    );
 
     await this.mailService.sendVerificationEmail(mailOptions);
 
@@ -89,7 +98,7 @@ export class VerificationService {
     });
 
     this.logger.log({
-      message: 'Verification email sent',
+      message: 'Verification email sent successfully',
       userId,
       email: user.email,
       ip: context?.ip,
@@ -144,5 +153,22 @@ export class VerificationService {
 
       throw error;
     }
+  }
+
+  /**
+   * Versiones públicas para el flujo de registro
+   * (reutiliza la lógica de los métodos autenticados)
+   */
+
+  async sendVerificationPublic(userId: string, context?: AuthContext): Promise<void> {
+    return this.sendVerification(userId, context);
+  }
+
+  async confirmVerificationPublic(
+    userId: string,
+    code: string,
+    context?: AuthContext,
+  ): Promise<void> {
+    return this.confirmVerification(userId, code, context);
   }
 }

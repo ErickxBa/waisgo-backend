@@ -104,10 +104,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         };
       }
 
-      // Extraer mensaje (tomar el primero si es array de validaciones)
-      const message = Array.isArray(exceptionResponse.message)
-        ? exceptionResponse.message[0]
-        : exceptionResponse.message || this.getDefaultMessage(status);
+      // Para errores de validación, retornar todos los mensajes si es un array
+      let message = '';
+      if (Array.isArray(exceptionResponse.message)) {
+        // Concatenar todos los mensajes de validación
+        message = exceptionResponse.message.join('; ');
+      } else if (typeof exceptionResponse.message === 'string') {
+        message = exceptionResponse.message;
+      } else {
+        message = this.getDefaultMessage(status);
+      }
 
       const code = exceptionResponse.code || this.getErrorCode(status);
 

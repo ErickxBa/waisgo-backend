@@ -7,6 +7,7 @@ import {
   BadRequestException,
   ParseUUIDPipe,
   Req,
+  Param,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -18,6 +19,7 @@ import {
 import { VerificationService } from './verification.service';
 import { ConfirmOtpDto } from './Dto/confirm-otp.dto';
 import { User } from 'src/modules/common/Decorators/user.decorator';
+import { Public } from 'src/modules/common/Decorators/public.decorator';
 import type { JwtPayload } from 'src/modules/common/types/jwt-payload.type';
 import type { AuthContext } from 'src/modules/common/types/auth-context.type';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
@@ -49,6 +51,73 @@ export class VerificationController {
       userAgent: req.headers['user-agent'] || 'unknown',
     };
   }
+
+  /**
+   * ENDPOINTS PÚBLICOS (para el flujo de registro)
+   */
+
+  @Public()
+  @Post('send/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enviar código de verificación por correo (registro)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Código de verificación enviado al correo registrado.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Usuario no encontrado o ya verificado.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado.',
+  })
+  async sendPublic(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Req() req: Request,
+  ) {
+    const context = this.getAuthContext(req);
+    await this.verificationService.sendVerificationPublic(userId, context);
+
+    return {
+      success: true,
+      message: ErrorMessages.VERIFICATION.CODE_SENT,
+    };
+  }
+
+  @Public()
+  @Post('confirm/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirmar código de verificación (registro)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cuenta verificada exitosamente.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Código incorrecto, expirado o demasiados intentos.',
+  })
+  async confirmPublic(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: ConfirmOtpDto,
+    @Req() req: Request,
+  ) {
+    const context = this.getAuthContext(req);
+    await this.verificationService.confirmVerificationPublic(
+      userId,
+      dto.code,
+      context,
+    );
+
+    return {
+      success: true,
+      message: ErrorMessages.VERIFICATION.VERIFICATION_SUCCESS,
+    };
+  }
+
+  /**
+   * ENDPOINTS AUTENTICADOS (para usuarios ya registrados)
+   */
 
   @Post('send')
   @HttpCode(HttpStatus.OK)
