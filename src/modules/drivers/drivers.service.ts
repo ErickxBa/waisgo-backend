@@ -1,8 +1,10 @@
+import { ConfigService } from '@nestjs/config';
 import {
   Injectable,
   BadRequestException,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -24,6 +26,20 @@ import { AuthService } from '../auth/auth.service';
 import type { AuthContext } from '../common/types/auth-context.type';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 
+export interface DriverDocumentWithUrl extends DriverDocument {
+  signedUrl: string;
+}
+
+export interface DriverStatusResponse {
+  hasApplication: boolean;
+  driver: Driver | null;
+  documents: DriverDocumentWithUrl[];
+  vehicles: Vehicle[];
+  canUploadDocuments: boolean;
+  canReapply: boolean;
+  daysUntilReapply?: number;
+}
+
 @Injectable()
 export class DriversService {
   private readonly logger = new Logger(DriversService.name);
@@ -40,14 +56,13 @@ export class DriversService {
     private readonly driverRepo: Repository<Driver>,
     @InjectRepository(DriverDocument)
     private readonly documentRepo: Repository<DriverDocument>,
-    @InjectRepository(Vehicle)
-    private readonly vehicleRepo: Repository<Vehicle>,
     @InjectRepository(BusinessUser)
     private readonly businessUserRepo: Repository<BusinessUser>,
     private readonly storageService: StorageService,
     private readonly auditService: AuditService,
     private readonly mailService: MailService,
     private readonly authService: AuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -83,9 +98,9 @@ export class DriversService {
       }
 
       if (existingDriver.estado === EstadoConductorEnum.RECHAZADO) {
-        const daysSinceRejection = existingDriver.updatedAt
+        const daysSinceRejection = existingDriver.fechaRechazo
           ? Math.floor(
-              (Date.now() - existingDriver.updatedAt.getTime()) /
+              (Date.now() - existingDriver.fechaRechazo.getTime()) /
                 (1000 * 60 * 60 * 24),
             )
           : 0;
@@ -99,6 +114,7 @@ export class DriversService {
         existingDriver.estado = EstadoConductorEnum.PENDIENTE;
         existingDriver.paypalEmail = paypalEmail;
         existingDriver.motivoRechazo = null;
+        existingDriver.fechaRechazo = null;
         await this.driverRepo.save(existingDriver);
 
         await this.auditService.logEvent({
@@ -157,14 +173,9 @@ export class DriversService {
   }
 
   /**
-   * Obtiene el estado de la solicitud del conductor
+   * Obtiene el estado de la solicitud del conductor con URLs firmadas
    */
-  async getMyDriverStatus(userId: string): Promise<{
-    hasApplication: boolean;
-    driver: Driver | null;
-    documents: DriverDocument[];
-    vehicles: Vehicle[];
-  }> {
+  async getMyDriverStatus(userId: string): Promise<DriverStatusResponse> {
     const driver = await this.driverRepo.findOne({
       where: { userId },
       relations: ['documents', 'vehicles'],
@@ -176,15 +187,97 @@ export class DriversService {
         driver: null,
         documents: [],
         vehicles: [],
+        canUploadDocuments: false,
+        canReapply: false,
       };
+    }
+
+    // Generar URLs firmadas para documentos
+    const documentsWithUrls = await this.getDocumentsWithSignedUrls(
+      driver.documents || [],
+    );
+
+    // Determinar si puede subir documentos
+    const canUploadDocuments = driver.estado === EstadoConductorEnum.PENDIENTE;
+
+    // Determinar si puede re-aplicar
+    let canReapply = false;
+    let daysUntilReapply: number | undefined;
+
+    if (driver.estado === EstadoConductorEnum.RECHAZADO) {
+      const { canApply, daysRemaining } = this.calculateReapplyStatus(driver);
+      canReapply = canApply;
+      daysUntilReapply = daysRemaining;
     }
 
     return {
       hasApplication: true,
       driver,
-      documents: driver.documents || [],
+      documents: documentsWithUrls,
       vehicles: driver.vehicles || [],
+      canUploadDocuments,
+      canReapply,
+      daysUntilReapply,
     };
+  }
+
+  /**
+   * Calcula si el usuario puede re-aplicar y cuántos días faltan
+   */
+  private calculateReapplyStatus(driver: Driver): {
+    canApply: boolean;
+    daysRemaining: number;
+  } {
+    const daysSinceRejection = driver.fechaRechazo
+      ? Math.floor(
+          (Date.now() - driver.fechaRechazo.getTime()) / (1000 * 60 * 60 * 24),
+        )
+      : 0;
+
+    const daysRemaining = Math.max(
+      0,
+      this.REJECTION_COOLDOWN_DAYS - daysSinceRejection,
+    );
+
+    return {
+      canApply: daysSinceRejection >= this.REJECTION_COOLDOWN_DAYS,
+      daysRemaining,
+    };
+  }
+
+  /**
+   * Genera URLs firmadas para una lista de documentos
+   */
+  private async getDocumentsWithSignedUrls(
+    documents: DriverDocument[],
+  ): Promise<DriverDocumentWithUrl[]> {
+    const bucket = this.configService.get('STORAGE_DRIVER_BUCKET');
+
+    if (!bucket) {
+      return documents.map((doc) => ({ ...doc, signedUrl: '' }));
+    }
+
+    return Promise.all(
+      documents.map(async (doc) => {
+        let signedUrl = '';
+        try {
+          signedUrl = await this.storageService.getSignedUrl(
+            bucket,
+            doc.archivoUrl,
+            3600, // 1 hora de expiración
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Failed to generate signed URL for document ${doc.id}: ${error instanceof Error ? error.message : 'Unknown'}`,
+          );
+        }
+
+        return {
+          ...doc,
+          signedUrl,
+        };
+      }),
+    );
   }
 
   /**
@@ -216,9 +309,26 @@ export class DriversService {
       throw new NotFoundException(ErrorMessages.DRIVER.NO_DRIVER_REQUEST);
     }
 
+    // Validar que solo se puedan subir documentos cuando está PENDIENTE
+    if (driver.estado !== EstadoConductorEnum.PENDIENTE) {
+      if (driver.estado === EstadoConductorEnum.RECHAZADO) {
+        throw new ForbiddenException(
+          ErrorMessages.DRIVER.CANNOT_UPLOAD_WHEN_REJECTED,
+        );
+      }
+      if (driver.estado === EstadoConductorEnum.APROBADO) {
+        throw new ForbiddenException(
+          ErrorMessages.DRIVER.CANNOT_UPLOAD_WHEN_APPROVED,
+        );
+      }
+      throw new ForbiddenException(
+        ErrorMessages.DRIVER.CANNOT_UPLOAD_DOCUMENTS,
+      );
+    }
+
     const uploadResult = await this.storageService.upload({
-      bucket: 'drivers',
-      folder: `${driver.id}/documents`,
+      bucket: `${this.configService.get('STORAGE_DRIVER_BUCKET')}`,
+      folder: `${driver.id}`,
       filename: tipo,
       buffer: file.buffer,
       mimetype: file.mimetype,

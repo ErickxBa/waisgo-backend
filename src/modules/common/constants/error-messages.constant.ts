@@ -89,6 +89,10 @@ export const ErrorMessages = {
     VEHICLE_CREATED: 'Vehículo registrado correctamente',
     VEHICLE_UPDATED: 'Vehículo actualizado correctamente',
     VEHICLE_DISABLED: 'Vehículo desactivado correctamente',
+    VEHICLE_REACTIVATED: 'Vehículo reactivado correctamente',
+    VEHICLE_ALREADY_ACTIVE: 'El vehículo ya está activo',
+    VEHICLE_REACTIVATION_EXPIRED:
+      'No se puede reactivar el vehículo. Han pasado más de 30 días desde su desactivación',
     PLATE_FORMAT: 'La placa debe tener 3 letras y 4 números (ej: ABC1234)',
     PLATE_ALREADY_EXISTS: 'Esta placa ya está registrada',
     SEATS_RANGE: 'Los asientos disponibles deben ser entre 1 y 6',
@@ -99,6 +103,12 @@ export const ErrorMessages = {
     DOCUMENT_UPLOADED: 'Documento subido correctamente',
     APPLICATION_SUBMITTED: 'Solicitud enviada correctamente',
     APPLICATION_RESUBMITTED: 'Solicitud reenviada correctamente',
+    CANNOT_UPLOAD_WHEN_REJECTED:
+      'No puedes subir documentos mientras tu solicitud esté rechazada. Debes volver a aplicar.',
+    CANNOT_UPLOAD_WHEN_APPROVED:
+      'No puedes modificar documentos después de ser aprobado como conductor.',
+    CANNOT_UPLOAD_DOCUMENTS:
+      'No puedes subir documentos en el estado actual de tu solicitud.',
   },
 
   // ============ ROUTES (RN-011, RN-012) ============ (No usados aún)

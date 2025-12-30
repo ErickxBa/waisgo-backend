@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -22,6 +23,7 @@ import { ErrorMessages } from '../common/constants/error-messages.constant';
 @Injectable()
 export class VehicleService {
   private readonly logger = new Logger(VehicleService.name);
+  private readonly REACTIVATION_WINDOW_DAYS = 30;
 
   constructor(
     @InjectRepository(Vehicle)
@@ -119,7 +121,8 @@ export class VehicleService {
   }
 
   /**
-   * Actualiza un vehículo
+   * Actualiza un vehículo (solo marca, modelo, color, asientos)
+   * Para cambiar placa o reactivar, usar los endpoints específicos.
    */
   async update(
     userId: string,
@@ -137,22 +140,6 @@ export class VehicleService {
       throw new NotFoundException(ErrorMessages.DRIVER.VEHICLE_NOT_FOUND);
     }
 
-    if (dto.placa) {
-      const normalizedPlaca = dto.placa.toUpperCase();
-      if (normalizedPlaca !== vehicle.placa) {
-        const existingPlaca = await this.vehicleRepo.findOne({
-          where: { placa: normalizedPlaca },
-        });
-
-        if (existingPlaca) {
-          throw new ConflictException(
-            ErrorMessages.DRIVER.PLATE_ALREADY_EXISTS,
-          );
-        }
-        vehicle.placa = normalizedPlaca;
-      }
-    }
-
     if (dto.marca) vehicle.marca = dto.marca.trim();
     if (dto.modelo) vehicle.modelo = dto.modelo.trim();
     if (dto.color) vehicle.color = dto.color.trim();
@@ -168,7 +155,11 @@ export class VehicleService {
       result: AuditResult.SUCCESS,
       ipAddress: context.ip,
       userAgent: context.userAgent,
-      metadata: { vehicleId: updatedVehicle.id, action: 'update' },
+      metadata: {
+        vehicleId: updatedVehicle.id,
+        action: 'update',
+        changes: dto,
+      },
     });
 
     this.logger.log(`Vehicle updated: ${vehicleId}`);
@@ -177,6 +168,21 @@ export class VehicleService {
       message: ErrorMessages.DRIVER.VEHICLE_UPDATED,
       vehicle: updatedVehicle,
     };
+  }
+
+  /**
+   * Valida si el vehículo puede ser reactivado (dentro de 30 días)
+   */
+  private async validateReactivation(vehicle: Vehicle): Promise<void> {
+    const daysSinceUpdate = Math.floor(
+      (Date.now() - vehicle.updatedAt.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    if (daysSinceUpdate > this.REACTIVATION_WINDOW_DAYS) {
+      throw new BadRequestException(
+        ErrorMessages.DRIVER.VEHICLE_REACTIVATION_EXPIRED,
+      );
+    }
   }
 
   /**
@@ -213,6 +219,52 @@ export class VehicleService {
 
     return {
       message: ErrorMessages.DRIVER.VEHICLE_DISABLED,
+    };
+  }
+
+  /**
+   * Reactiva un vehículo (endpoint específico)
+   */
+  async reactivate(
+    userId: string,
+    vehicleId: string,
+    context: AuthContext,
+  ): Promise<{ message: string; vehicle: Vehicle }> {
+    const driver = await this.getApprovedDriver(userId);
+
+    const vehicle = await this.vehicleRepo.findOne({
+      where: { id: vehicleId, driverId: driver.id },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException(ErrorMessages.DRIVER.VEHICLE_NOT_FOUND);
+    }
+
+    if (vehicle.isActivo) {
+      throw new BadRequestException(
+        ErrorMessages.DRIVER.VEHICLE_ALREADY_ACTIVE,
+      );
+    }
+
+    await this.validateReactivation(vehicle);
+
+    vehicle.isActivo = true;
+    const savedVehicle = await this.vehicleRepo.save(vehicle);
+
+    await this.auditService.logEvent({
+      action: AuditAction.DRIVER_VEHICLE_UPDATE,
+      userId,
+      result: AuditResult.SUCCESS,
+      ipAddress: context.ip,
+      userAgent: context.userAgent,
+      metadata: { vehicleId, action: 'reactivate' },
+    });
+
+    this.logger.log(`Vehicle reactivated: ${vehicleId}`);
+
+    return {
+      message: ErrorMessages.DRIVER.VEHICLE_REACTIVATED,
+      vehicle: savedVehicle,
     };
   }
 

@@ -14,9 +14,11 @@ import { Roles } from '../common/Decorators/roles.decorator';
 import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
+  ApiBody,
 } from '@nestjs/swagger';
 import { User } from '../common/Decorators/user.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.type';
@@ -92,6 +94,18 @@ export class BusinessController {
   @Patch('profile/photo')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
   @ApiOperation({ summary: 'Actualizar foto de perfil del usuario verificado' })
   @ApiResponse({
     status: 200,

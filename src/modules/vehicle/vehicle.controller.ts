@@ -121,4 +121,27 @@ export class VehiclesController {
     const context = this.getAuthContext(req);
     return this.vehicleService.disable(safeUserId, safeVehicleId, context);
   }
+
+  @Roles(RolUsuarioEnum.CONDUCTOR)
+  @Patch(':id/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reactivar vehículo (máximo 30 días después de desactivar)',
+  })
+  @ApiResponse({ status: 200, description: 'Vehículo reactivado' })
+  @ApiResponse({
+    status: 400,
+    description: 'Ya está activo o pasaron más de 30 días',
+  })
+  @ApiResponse({ status: 404, description: 'Vehículo no encontrado' })
+  async reactivate(
+    @User() user: JwtPayload,
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const safeUserId = await this.validateUserId(user.id);
+    const safeVehicleId = await this.validateVehicleId(id);
+    const context = this.getAuthContext(req);
+    return this.vehicleService.reactivate(safeUserId, safeVehicleId, context);
+  }
 }

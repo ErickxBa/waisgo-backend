@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 
 import { Driver } from '../drivers/Models/driver.entity';
 import { DriverDocument } from '../drivers/Models/driver-document.entity';
@@ -17,8 +18,20 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/Enums/audit-actions.enum';
 import { AuditResult } from '../audit/Enums/audit-result.enum';
 import { MailService } from '../mail/mail.service';
+import { StorageService } from '../storage/storage.service';
 import type { AuthContext } from '../common/types/auth-context.type';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
+
+export interface DocumentWithSignedUrl {
+  id: string;
+  tipo: string;
+  archivoUrl: string;
+  signedUrl: string;
+  estado: EstadoDocumentoEnum;
+  motivoRechazo: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface DriverListItem {
   id: string;
@@ -30,6 +43,11 @@ export interface DriverListItem {
   userEmail?: string;
   documentsCount: number;
   pendingDocuments: number;
+}
+
+export interface DriverDetailResponse {
+  driver: Driver;
+  documentsWithUrls: DocumentWithSignedUrl[];
 }
 
 @Injectable()
@@ -46,6 +64,8 @@ export class AdminService {
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
     private readonly mailService: MailService,
+    private readonly storageService: StorageService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -91,9 +111,9 @@ export class AdminService {
   }
 
   /**
-   * Obtiene el detalle de una solicitud de conductor
+   * Obtiene el detalle de una solicitud de conductor con URLs firmadas
    */
-  async getDriverDetail(driverId: string): Promise<Driver> {
+  async getDriverDetail(driverId: string): Promise<DriverDetailResponse> {
     const driver = await this.driverRepo.findOne({
       where: { id: driverId },
       relations: ['user', 'user.profile', 'documents', 'vehicles'],
@@ -103,7 +123,64 @@ export class AdminService {
       throw new NotFoundException(ErrorMessages.ADMIN.DRIVER_REQUEST_NOT_FOUND);
     }
 
-    return driver;
+    const documentsWithUrls = await this.generateSignedUrlsForDocuments(
+      driver.documents || [],
+    );
+
+    return {
+      driver,
+      documentsWithUrls,
+    };
+  }
+
+  /**
+   * Genera URLs firmadas para los documentos
+   */
+  private async generateSignedUrlsForDocuments(
+    documents: DriverDocument[],
+  ): Promise<DocumentWithSignedUrl[]> {
+    const bucket = this.configService.get('STORAGE_DRIVER_BUCKET');
+
+    if (!bucket) {
+      return documents.map((doc) => ({
+        id: doc.id,
+        tipo: doc.tipo,
+        archivoUrl: doc.archivoUrl,
+        signedUrl: '',
+        estado: doc.estado,
+        motivoRechazo: doc.motivoRechazo,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      }));
+    }
+
+    return Promise.all(
+      documents.map(async (doc) => {
+        let signedUrl = '';
+        try {
+          signedUrl = await this.storageService.getSignedUrl(
+            bucket,
+            doc.archivoUrl,
+            3600, // 1 hora
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Failed to generate signed URL for document ${doc.id}: ${error instanceof Error ? error.message : 'Unknown'}`,
+          );
+        }
+
+        return {
+          id: doc.id,
+          tipo: doc.tipo,
+          archivoUrl: doc.archivoUrl,
+          signedUrl,
+          estado: doc.estado,
+          motivoRechazo: doc.motivoRechazo,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+        };
+      }),
+    );
   }
 
   /**
@@ -218,6 +295,7 @@ export class AdminService {
 
     driver.estado = EstadoConductorEnum.RECHAZADO;
     driver.motivoRechazo = motivo.trim();
+    driver.fechaRechazo = new Date();
     await this.driverRepo.save(driver);
 
     await this.auditService.logEvent({
