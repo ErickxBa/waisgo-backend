@@ -13,8 +13,7 @@ import {
 } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 
 @Injectable()
 export class MailService {

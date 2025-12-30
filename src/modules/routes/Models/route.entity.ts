@@ -11,8 +11,7 @@ import {
 } from 'typeorm';
 import { Driver } from '../../drivers/Models/driver.entity';
 import { RouteStop } from './route-stop.entity';
-import { CampusOrigenEnum } from '../Enums/campus-origen.enum';
-import { EstadoRutaEnum } from '../Enums/estado-ruta.enum';
+import { CampusOrigenEnum, EstadoRutaEnum } from '../Enums';
 
 @Entity({ schema: 'business', name: 'routes' })
 @Index('IDX_routes_driver_id', ['driverId'])

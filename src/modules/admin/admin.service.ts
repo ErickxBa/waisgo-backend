@@ -13,13 +13,12 @@ import { DriverDocument } from '../drivers/Models/driver-document.entity';
 import { AuthUser } from '../auth/Models/auth-user.entity';
 import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 import { EstadoDocumentoEnum } from '../drivers/Enums/estado-documento.enum';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { RolUsuarioEnum } from '../auth/Enum';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 import { MailService } from '../mail/mail.service';
 import { StorageService } from '../storage/storage.service';
-import type { AuthContext } from '../common/types/auth-context.type';
+import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 
 export interface DocumentWithSignedUrl {

@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { BusinessUser } from './Models/business-user.entity';
 import { UserProfile } from './Models/user-profile.entity';
 import { Repository, EntityManager } from 'typeorm';
-import { UpdateProfileDto } from './Dto/update-profile.dto';
+import { UpdateProfileDto } from './Dto';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { ConfigService } from '@nestjs/config';
 

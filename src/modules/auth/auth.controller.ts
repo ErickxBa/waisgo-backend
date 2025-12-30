@@ -18,17 +18,16 @@ import {
 } from '@nestjs/swagger';
 
 import { AuthService } from './auth.service';
-import { LoginDto } from './Dto/login.dto';
-import { ForgotPasswordDto } from './Dto/forgot-password.dto';
-import { ResetPasswordDto } from './Dto/reset-password.dto';
-import { Public } from '../common/Decorators/public.decorator';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import type { AuthContext } from '../common/types/auth-context.type';
-import { RegisterUserDto } from './Dto/register-user.dto';
-import { UpdatePasswordDto } from './Dto/update-password.dto';
-import { RolUsuarioEnum } from './Enum/users-roles.enum';
-import { Roles } from '../common/Decorators/roles.decorator';
+import {
+  LoginDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  RegisterUserDto,
+  UpdatePasswordDto,
+} from './Dto';
+import { Public, User, Roles } from '../common/Decorators';
+import type { JwtPayload, AuthContext } from '../common/types';
+import { RolUsuarioEnum } from './Enum';
 
 @ApiTags('Auth')
 @Controller('auth')

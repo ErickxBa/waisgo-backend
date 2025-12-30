@@ -6,7 +6,7 @@ import {
   TypeOrmHealthIndicator,
   HealthCheckResult,
 } from '@nestjs/terminus';
-import { Public } from '../Decorators/public.decorator';
+import { Public } from '../Decorators';
 
 @ApiTags('Health')
 @Controller('health')

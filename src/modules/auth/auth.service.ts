@@ -15,20 +15,17 @@ import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 
-import { EstadoVerificacionEnum } from './Enum/estado-ver.enum';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { EstadoVerificacionEnum, RolUsuarioEnum } from './Enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 
-import { LoginDto } from './Dto/login.dto';
-import { AuthContext } from '../common/types/auth-context.type';
+import { LoginDto, RegisterUserDto } from './Dto';
+import { AuthContext } from '../common/types';
 
 import { AuditService } from './../audit/audit.service';
 import { RedisService } from 'src/redis/redis.service';
 import { MailService } from 'src/modules/mail/mail.service';
 import { AuthUser } from './Models/auth-user.entity';
 import { BusinessService } from '../business/business.service';
-import { RegisterUserDto } from './Dto/register-user.dto';
-import { RolUsuarioEnum } from './Enum/users-roles.enum';
 
 @Injectable()
 export class AuthService {

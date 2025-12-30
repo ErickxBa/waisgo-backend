@@ -5,7 +5,7 @@ import { Repository, LessThan } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { AuthUser } from '../Models/auth-user.entity';
 import { BusinessService } from '../../business/business.service';
-import { EstadoVerificacionEnum } from '../Enum/estado-ver.enum';
+import { EstadoVerificacionEnum } from '../Enum';
 
 @Injectable()
 export class CleanupUnverifiedUsersJob {

@@ -11,8 +11,8 @@ import {
 } from 'typeorm';
 import { Route } from '../../routes/Models/route.entity';
 import { BusinessUser } from '../../business/Models/business-user.entity';
-import { EstadoReservaEnum } from '../Enums/estado-reserva.enum';
-import { MetodoPagoEnum } from '../../payments/Enums/metodo-pago.enum';
+import { EstadoReservaEnum } from '../Enums';
+import { MetodoPagoEnum } from '../../payments/Enums';
 
 @Entity({ schema: 'business', name: 'bookings' })
 @Unique('UQ_bookings_route_passenger', ['routeId', 'passengerId'])

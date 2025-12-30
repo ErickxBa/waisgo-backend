@@ -14,16 +14,17 @@ import { Driver } from './Models/driver.entity';
 import { DriverDocument } from './Models/driver-document.entity';
 import { Vehicle } from './Models/vehicle.entity';
 import { BusinessUser } from '../business/Models/business-user.entity';
-import { EstadoConductorEnum } from './Enums/estado-conductor.enum';
-import { EstadoDocumentoEnum } from './Enums/estado-documento.enum';
-import { TipoDocumentoEnum } from './Enums/tipo-documento.enum';
+import {
+  EstadoConductorEnum,
+  EstadoDocumentoEnum,
+  TipoDocumentoEnum,
+} from './Enums';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 import { MailService } from '../mail/mail.service';
 import { AuthService } from '../auth/auth.service';
-import type { AuthContext } from '../common/types/auth-context.type';
+import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 
 export interface DriverDocumentWithUrl extends DriverDocument {

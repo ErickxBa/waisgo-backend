@@ -10,8 +10,8 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { Roles } from '../common/Decorators/roles.decorator';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { Roles, User } from '../common/Decorators';
+import { RolUsuarioEnum } from '../auth/Enum';
 import {
   ApiBearerAuth,
   ApiConsumes,
@@ -20,9 +20,8 @@ import {
   ApiTags,
   ApiBody,
 } from '@nestjs/swagger';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import { UpdateProfileDto } from './Dto/update-profile.dto';
+import type { JwtPayload } from '../common/types';
+import { UpdateProfileDto } from './Dto';
 import { BusinessService } from './business.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 

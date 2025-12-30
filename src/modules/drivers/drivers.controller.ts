@@ -23,14 +23,12 @@ import {
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 
-import { Roles } from '../common/Decorators/roles.decorator';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import type { AuthContext } from '../common/types/auth-context.type';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { Roles, User } from '../common/Decorators';
+import type { JwtPayload, AuthContext } from '../common/types';
+import { RolUsuarioEnum } from '../auth/Enum';
 import { DriversService } from './drivers.service';
-import { ApplyDriverDto } from './Dto/apply-driver.dto';
-import { TipoDocumentoEnum } from './Enums/tipo-documento.enum';
+import { ApplyDriverDto } from './Dto';
+import { TipoDocumentoEnum } from './Enums';
 
 @ApiTags('Drivers')
 @ApiBearerAuth('access-token')

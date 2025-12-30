@@ -11,8 +11,7 @@ import {
 } from 'typeorm';
 import { Booking } from '../../bookings/Models/booking.entity';
 import { Payout } from './payout.entity';
-import { MetodoPagoEnum } from '../Enums/metodo-pago.enum';
-import { EstadoPagoEnum } from '../Enums/estado-pago.enum';
+import { MetodoPagoEnum, EstadoPagoEnum } from '../Enums';
 
 @Entity({ schema: 'business', name: 'payments' })
 @Index('IDX_payments_status', ['status'])

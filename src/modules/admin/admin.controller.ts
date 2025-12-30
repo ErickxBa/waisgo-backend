@@ -20,13 +20,11 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 
-import { Roles } from '../common/Decorators/roles.decorator';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import type { AuthContext } from '../common/types/auth-context.type';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { Roles, User } from '../common/Decorators';
+import type { JwtPayload, AuthContext } from '../common/types';
+import { RolUsuarioEnum } from '../auth/Enum';
 import { AdminService } from './admin.service';
-import { RejectDriverDto } from './Dto/reject-driver.dto';
+import { RejectDriverDto } from './Dto';
 import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 
 @ApiTags('Admin - Drivers')

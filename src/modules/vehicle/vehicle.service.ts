@@ -12,12 +12,10 @@ import { Repository } from 'typeorm';
 import { Vehicle } from '../drivers/Models/vehicle.entity';
 import { Driver } from '../drivers/Models/driver.entity';
 import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
-import { CreateVehicleDto } from './Dto/create-vehicle.dto';
-import { UpdateVehicleDto } from './Dto/update-vehicle.dto';
+import { CreateVehicleDto, UpdateVehicleDto } from './Dto';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
-import type { AuthContext } from '../common/types/auth-context.type';
+import { AuditAction, AuditResult } from '../audit/Enums';
+import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 
 @Injectable()

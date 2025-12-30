@@ -10,8 +10,7 @@ import {
   Unique,
 } from 'typeorm';
 import { Driver } from './driver.entity';
-import { TipoDocumentoEnum } from '../Enums/tipo-documento.enum';
-import { EstadoDocumentoEnum } from '../Enums/estado-documento.enum';
+import { TipoDocumentoEnum, EstadoDocumentoEnum } from '../Enums';
 
 @Entity({ schema: 'business', name: 'driver_documents' })
 @Unique('UQ_driver_documents_driver_tipo', ['driverId', 'tipo'])

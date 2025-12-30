@@ -16,13 +16,13 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { VerificationService } from './verification.service';
-import { ConfirmOtpDto } from './Dto/confirm-otp.dto';
+import { ConfirmOtpDto } from './Dto';
 import { User } from 'src/modules/common/Decorators/user.decorator';
 import type { JwtPayload } from 'src/modules/common/types/jwt-payload.type';
 import type { AuthContext } from 'src/modules/common/types/auth-context.type';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { Roles } from '../common/Decorators/roles.decorator';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { RolUsuarioEnum } from '../auth/Enum';
 
 @ApiTags('Verification')
 @Controller('verification')

@@ -6,8 +6,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { RolUsuarioEnum } from '../Enum/users-roles.enum';
-import { ROLES_KEY } from 'src/modules/common/Decorators/roles.decorator';
+import { RolUsuarioEnum } from '../Enum';
+import { ROLES_KEY } from 'src/modules/common/Decorators';
 import type { Request } from 'express';
 
 @Injectable()

@@ -10,7 +10,7 @@ import {
   Unique,
 } from 'typeorm';
 import { Driver } from '../../drivers/Models/driver.entity';
-import { EstadoPayoutEnum } from '../Enums/estado-payout.enum';
+import { EstadoPayoutEnum } from '../Enums';
 
 @Entity({ schema: 'business', name: 'payouts' })
 @Unique('UQ_payouts_driver_period', ['driverId', 'period'])
