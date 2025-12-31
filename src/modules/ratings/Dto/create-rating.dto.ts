@@ -8,6 +8,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 export class CreateRatingDto {
   @ApiProperty({
@@ -31,8 +32,8 @@ export class CreateRatingDto {
     maximum: 5,
   })
   @IsInt()
-  @Min(1)
-  @Max(5)
+  @Min(1, { message: ErrorMessages.RATINGS.INVALID_RATING })
+  @Max(5, { message: ErrorMessages.RATINGS.INVALID_RATING })
   score: number;
 
   @ApiPropertyOptional({

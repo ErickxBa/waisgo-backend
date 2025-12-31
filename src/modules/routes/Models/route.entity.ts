@@ -50,6 +50,9 @@ export class Route {
   @Column({ type: 'int' })
   asientosDisponibles: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  precioPasajero: number;
+
   @Column({
     type: 'enum',
     enum: EstadoRutaEnum,

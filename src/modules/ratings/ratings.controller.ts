@@ -8,7 +8,9 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -21,13 +23,26 @@ import { Roles, User } from '../common/Decorators';
 import { RolUsuarioEnum } from '../auth/Enum';
 import { RatingsService } from './ratings.service';
 import { CreateRatingDto } from './Dto';
-import type { JwtPayload } from '../common/types';
+import type { JwtPayload, AuthContext } from '../common/types';
 
 @ApiTags('Ratings')
 @ApiBearerAuth('access-token')
 @Controller('ratings')
 export class RatingsController {
   constructor(private readonly ratingsService: RatingsService) {}
+
+  private getAuthContext(req: Request): AuthContext {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ip =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : req.ip || req.socket?.remoteAddress || 'unknown';
+
+    return {
+      ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+    };
+  }
 
   /* ========== PASAJERO / CONDUCTOR ========== */
 
@@ -47,16 +62,16 @@ export class RatingsController {
     description: 'Ya calificaste o tiempo expirado.',
   })
   @ApiResponse({ status: 404, description: 'Ruta no encontrada.' })
-  async createRating(@User() user: JwtPayload, @Body() dto: CreateRatingDto) {
-    // TODO:
-    // 1. Validar que la ruta existe y está FINALIZADA o el booking está COMPLETADA
-    // 2. Validar que no han pasado más de 24h desde la finalización
-    // 3. Validar que no existe ya una calificación de este usuario a ese usuario en esa ruta
-    // 4. Validar que el usuario participó en la ruta (como conductor o pasajero)
-    // 5. Crear la calificación
-    // 6. Actualizar promedio del usuario calificado
-    // 7. Si promedio < 3.0, marcar usuario como bloqueado
-    return this.ratingsService.createRating(user.sub, dto);
+  async createRating(
+    @User() user: JwtPayload,
+    @Body() dto: CreateRatingDto,
+    @Req() req: Request,
+  ) {
+    return this.ratingsService.createRating(
+      user.sub,
+      dto,
+      this.getAuthContext(req),
+    );
   }
 
   /**

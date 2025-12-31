@@ -7,6 +7,9 @@ import { Repository, EntityManager } from 'typeorm';
 import { UpdateProfileDto } from './Dto';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { ConfigService } from '@nestjs/config';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditResult } from '../audit/Enums';
+import type { AuthContext } from '../common/types';
 
 @Injectable()
 export class BusinessService {
@@ -19,6 +22,7 @@ export class BusinessService {
     private readonly profileRepo: Repository<UserProfile>,
     private readonly storageService: StorageService,
     private readonly config: ConfigService,
+    private readonly auditService: AuditService,
   ) {}
 
   private generateAlias(): string {
@@ -91,6 +95,7 @@ export class BusinessService {
   async updateProfile(
     userId: string,
     dto: UpdateProfileDto,
+    context?: AuthContext,
   ): Promise<{ message: string }> {
     const profile = await this.profileRepo.findOne({
       where: { userId },
@@ -115,10 +120,19 @@ export class BusinessService {
 
     this.logger.log(`Profile updated for user: ${userId}`);
 
+    await this.auditService.logEvent({
+      action: AuditAction.PROFILE_UPDATE,
+      userId,
+      result: AuditResult.SUCCESS,
+      ipAddress: context?.ip,
+      userAgent: context?.userAgent,
+      metadata: { changes: dto },
+    });
+
     return { message: ErrorMessages.USER.PROFILE_UPDATED };
   }
 
-  async softDeleteUser(userId: string): Promise<void> {
+  async softDeleteUser(userId: string, context?: AuthContext): Promise<void> {
     const result = await this.businessUserRepo.update(
       { id: userId, isDeleted: false },
       {
@@ -131,6 +145,14 @@ export class BusinessService {
       this.logger.warn(`User not found or already deleted: ${userId}`);
     } else {
       this.logger.log(`User soft deleted: ${userId}`);
+
+      await this.auditService.logEvent({
+        action: AuditAction.ACCOUNT_DEACTIVATED,
+        userId,
+        result: AuditResult.SUCCESS,
+        ipAddress: context?.ip,
+        userAgent: context?.userAgent,
+      });
     }
   }
 
@@ -200,6 +222,7 @@ export class BusinessService {
   async updateProfilePhoto(
     userId: string,
     file: Express.Multer.File,
+    context?: AuthContext,
   ): Promise<{ message: string }> {
     const profile = await this.profileRepo.findOne({ where: { userId } });
 
@@ -218,7 +241,16 @@ export class BusinessService {
     profile.fotoPerfilUrl = objectPath;
     await this.profileRepo.save(profile);
 
-    return { message: 'Foto de perfil actualizada correctamente' };
+    await this.auditService.logEvent({
+      action: AuditAction.PROFILE_PHOTO_UPDATE,
+      userId,
+      result: AuditResult.SUCCESS,
+      ipAddress: context?.ip,
+      userAgent: context?.userAgent,
+      metadata: { objectPath },
+    });
+
+    return { message: ErrorMessages.USER.PROFILE_PHOTO_UPDATED };
   }
 
   private getDefaultAvatarUrl(): Promise<string> {

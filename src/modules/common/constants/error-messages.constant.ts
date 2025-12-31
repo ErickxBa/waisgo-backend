@@ -52,6 +52,7 @@ export const ErrorMessages = {
     NOT_FOUND: 'Usuario no encontrado',
     NOT_VERIFIED: 'Debes verificar tu cuenta primero',
     PROFILE_UPDATED: 'Perfil actualizado correctamente',
+    PROFILE_PHOTO_UPDATED: 'Foto de perfil actualizada correctamente',
     PROFILE_NOT_FOUND: 'Perfil no encontrado',
   },
 
@@ -96,6 +97,7 @@ export const ErrorMessages = {
     FILE_TOO_LARGE: 'El archivo no puede superar 2 MB',
     INVALID_FILE_FORMAT: 'Solo se permiten archivos PNG, JPG o PDF',
     INVALID_PAYPAL: 'La cuenta de PayPal no es válida',
+    PAYPAL_EMAIL_MAX_LENGTH: 'El email no puede superar 254 caracteres',
     DOCUMENT_UPLOADED: 'Documento subido correctamente',
     APPLICATION_SUBMITTED: 'Solicitud enviada correctamente',
     APPLICATION_RESUBMITTED: 'Solicitud reenviada correctamente',
@@ -109,6 +111,19 @@ export const ErrorMessages = {
 
   // ============ ROUTES (RN-011, RN-012) ============
   ROUTES: {
+    ROUTE_CREATED: 'Ruta creada correctamente',
+    ROUTES_LIST_DRIVER: 'Listado de rutas creadas por el conductor',
+    ROUTES_LIST_AVAILABLE:
+      'Listado de rutas activas cercanas al pasajero segun ubicacion',
+    ROUTE_DETAIL: 'Detalle de la ruta solicitada',
+    ROUTE_MAP: 'Coordenadas de la ruta para visualizacion en el mapa',
+    ROUTE_STOP_ADDED: 'Parada agregada a la ruta y trayecto recalculado',
+    ROUTE_CANCELLED: 'Ruta cancelada correctamente',
+    ROUTE_FINALIZED: 'Ruta finalizada. Ya no esta disponible para pasajeros',
+    ROUTE_NOT_ACTIVE: 'La ruta no esta activa',
+    ROUTE_NOT_FINISHED: 'La ruta aun no ha finalizado',
+    ROUTE_PRICE_REQUIRED: 'La ruta no tiene precio configurado',
+    NO_ACTIVE_VEHICLE: 'Debes tener un vehiculo activo para crear rutas',
     ONLY_DRIVERS_CAN_CREATE: 'Solo conductores pueden crear rutas',
     DRIVER_BLOCKED_LOW_RATING:
       'No puedes crear rutas con calificación menor a 3.0',
@@ -121,6 +136,15 @@ export const ErrorMessages = {
 
   // ============ BOOKINGS (RN-014, RN-015) ============
   BOOKINGS: {
+    BOOKING_NOT_ACTIVE: 'La reserva no esta activa',
+    BOOKING_CREATED: 'Reserva creada correctamente',
+    BOOKINGS_LIST: 'Listado de reservas del pasajero',
+    BOOKING_DETAIL: 'Detalle de la reserva',
+    BOOKING_MAP: 'Mapa de la reserva',
+    BOOKINGS_ROUTE_LIST: 'Listado de pasajeros confirmados en la ruta',
+    BOOKING_COMPLETED: 'Pasajero marcado como llegado',
+    BOOKING_NO_SHOW: 'Pasajero marcado como NO_SHOW',
+    NO_SHOW_TOO_EARLY: 'Aun no han pasado 30 minutos desde la hora de salida',
     PASSENGER_BLOCKED_LOW_RATING:
       'No puedes reservar viajes con calificación menor a 3.0',
     PASSENGER_HAS_DEBT:
@@ -138,6 +162,7 @@ export const ErrorMessages = {
     OTP_NOT_FOUND: 'No tienes un código OTP activo',
     OTP_EXPIRED: 'El código OTP ha expirado',
     OTP_INVALID: 'Código OTP incorrecto',
+    OTP_FORMAT_INVALID: 'El OTP debe ser de 6 d¡gitos num‚ricos',
     OTP_ALREADY_USED: 'Este código OTP ya fue utilizado',
     TRIP_STARTED: 'Viaje iniciado correctamente',
     NO_SHOW_REPORTED: 'No show reportado. Se procesará el cobro parcial',
@@ -145,6 +170,18 @@ export const ErrorMessages = {
 
   // ============ PAYMENTS (RN-017, RN-018, RN-019) ============
   PAYMENTS: {
+    PAYMENT_NOT_FOUND: 'Pago no encontrado',
+    PAYMENT_INITIATED: 'Pago iniciado correctamente',
+    PAYMENT_DETAIL: 'Detalle del pago',
+    PAYMENTS_LIST: 'Listado de pagos del pasajero',
+    DRIVER_PAYMENTS_LIST: 'Pagos recibidos por el conductor',
+    PAYMENTS_LIST_ADMIN: 'Listado global de pagos',
+    PAYPAL_ORDER_CREATED: 'Orden PayPal creada correctamente',
+    PAYPAL_CAPTURED: 'Pago PayPal capturado correctamente',
+    PAYMENT_REVERSED: 'Pago revertido correctamente',
+    PAYMENT_ALREADY_EXISTS: 'Ya existe un pago para esta reserva',
+    PAYMENT_NOT_PENDING: 'El pago no esta en estado pendiente',
+    PAYMENT_NOT_PAID: 'El pago no esta en estado pagado',
     PAYMENT_FAILED: 'Error al procesar el pago',
     PAYMENT_SUCCESS: 'Pago procesado correctamente',
     REFUND_PROCESSING: 'Reembolso en proceso (24-48 horas)',
@@ -155,8 +192,28 @@ export const ErrorMessages = {
       'Tu cuenta de PayPal no es válida. Actualízala en tu perfil',
   },
 
+  // ============ PAYOUTS (RN-020, RN-021, RN-022) ============
+  PAYOUTS: {
+    PAYOUTS_LIST: 'Historial de pagos al conductor',
+    PAYOUT_DETAIL: 'Detalle del payout',
+    PAYOUTS_GENERATED: 'Payouts generados para el periodo',
+    PAYOUT_SENT: 'Payout enviado por PayPal correctamente',
+    PAYOUT_FAILED: 'Payout marcado como fallido',
+    PAYOUTS_LIST_ADMIN: 'Listado global de payouts',
+    PAYOUT_NOT_FOUND: 'Payout no encontrado',
+    PAYOUT_NOT_PENDING: 'El payout no esta en estado pendiente',
+    INVALID_PERIOD: 'El periodo debe estar en formato YYYY-MM',
+  },
+
   // ============ RATINGS (RN-027, RN-028, RN-029) ============
   RATINGS: {
+    ROUTE_NOT_COMPLETED: 'La ruta aun no esta finalizada',
+    NOT_PARTICIPANT: 'No participaste en esta ruta',
+    RATINGS_LIST_RECEIVED: 'Listado de calificaciones recibidas',
+    RATINGS_LIST_GIVEN: 'Listado de calificaciones realizadas',
+    RATINGS_SUMMARY: 'Resumen de rating del usuario',
+    RATINGS_LIST_ADMIN: 'Listado global de calificaciones',
+    LOW_RATED_USERS: 'Usuarios con rating bajo',
     RATING_WINDOW_EXPIRED:
       'El período para calificar ha expirado (máximo 24 horas)',
     ALREADY_RATED: 'Ya calificaste este viaje',
@@ -179,8 +236,12 @@ export const ErrorMessages = {
     DOCUMENT_APPROVED: 'Documento aprobado correctamente',
     DOCUMENT_REJECTED: 'Documento rechazado',
     REJECTION_REASON_REQUIRED: 'Debes indicar el motivo del rechazo',
+    REJECTION_REASON_MIN_LENGTH: 'El motivo debe tener minimo 10 caracteres',
+    REJECTION_REASON_MAX_LENGTH: 'El motivo debe tener maximo 500 caracteres',
     ROLE_UPDATED: 'Rol de usuario actualizado',
     ACTION_LOGGED: 'Acción registrada en auditoría',
+    SEED_ALREADY_RUN: 'La semilla ya fue ejecutada previamente',
+    SEED_COMPLETED: 'Semilla creada correctamente',
   },
 
   // ============ GENERIC / SYSTEM ============
@@ -191,8 +252,25 @@ export const ErrorMessages = {
     NOT_FOUND: 'Recurso no encontrado',
     TOO_MANY_REQUESTS: 'Demasiadas solicitudes. Intenta más tarde',
     INVALID_TOKEN: 'Token inválido o expirado',
+    TOKEN_REQUIRED: 'Token requerido',
+    TOKEN_MALFORMED: 'Token malformado',
+    TOKEN_EXPIRED: 'Token expirado',
+    TOKEN_REVOKED: 'Token revocado',
+    ROLE_NOT_IDENTIFIED: 'Rol no identificado',
+    ACCESS_DENIED_ROLE: 'Acceso denegado para su rol',
     SESSION_EXPIRED: 'Tu sesión ha expirado. Inicia sesión nuevamente',
   },
+
+  // ============ STORAGE ============
+  STORAGE: {
+    UPLOAD_FAILED: 'Error al subir el archivo',
+  },
+
+  // ============ MAIL ============
+  MAIL: {
+    SEND_FAILED: 'Error al enviar el correo electr¢nico. Por favor intente m s tarde.',
+  },
+
 } as const;
 
 // Códigos de error para el frontend (para manejar casos específicos)
@@ -243,4 +321,15 @@ export const ErrorCodes = {
   FORBIDDEN: 'SYS_003',
   RATE_LIMIT: 'SYS_004',
   VALIDATION_ERROR: 'SYS_005',
+
+  // ============ STORAGE ============
+  STORAGE: {
+    UPLOAD_FAILED: 'Error al subir el archivo',
+  },
+
+  // ============ MAIL ============
+  MAIL: {
+    SEND_FAILED: 'Error al enviar el correo electr¢nico. Por favor intente m s tarde.',
+  },
+
 } as const;

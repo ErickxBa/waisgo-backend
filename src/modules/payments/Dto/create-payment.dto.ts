@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsUUID, IsEnum } from 'class-validator';
 import { MetodoPagoEnum } from '../Enums/metodo-pago.enum';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 export class CreatePaymentDto {
   @ApiProperty({
@@ -15,6 +16,8 @@ export class CreatePaymentDto {
     enum: MetodoPagoEnum,
     example: MetodoPagoEnum.PAYPAL,
   })
-  @IsEnum(MetodoPagoEnum)
+  @IsEnum(MetodoPagoEnum, {
+    message: ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD,
+  })
   method: MetodoPagoEnum;
 }

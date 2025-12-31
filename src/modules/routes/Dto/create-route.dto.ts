@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsString,
   IsInt,
+  IsNumber,
   Min,
   Max,
   IsOptional,
@@ -15,6 +16,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CampusOrigenEnum } from '../Enums/campus-origen.enum';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 export class RouteStopDto {
   @ApiProperty({
@@ -64,7 +66,7 @@ export class CreateRouteDto {
   })
   @IsString()
   @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/, {
-    message: 'La hora debe estar en formato HH:mm',
+    message: ErrorMessages.VALIDATION.INVALID_FORMAT('horaSalida'),
   })
   horaSalida: string;
 
@@ -84,6 +86,15 @@ export class CreateRouteDto {
   @Min(1)
   @Max(8)
   asientosTotales: number;
+
+  @ApiProperty({
+    description: 'Precio por pasajero',
+    example: 2.5,
+  })
+  @IsNumber()
+  @Min(0.1, { message: ErrorMessages.ROUTES.ROUTE_PRICE_REQUIRED })
+  @Type(() => Number)
+  precioPasajero: number;
 
   @ApiPropertyOptional({
     description: 'Mensaje opcional del conductor',

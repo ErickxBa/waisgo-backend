@@ -9,7 +9,9 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -22,13 +24,26 @@ import { Roles, User } from '../common/Decorators';
 import { RolUsuarioEnum } from '../auth/Enum';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, CapturePaypalDto } from './Dto';
-import type { JwtPayload } from '../common/types';
+import type { JwtPayload, AuthContext } from '../common/types';
 
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
+
+  private getAuthContext(req: Request): AuthContext {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ip =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : req.ip || req.socket?.remoteAddress || 'unknown';
+
+    return {
+      ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+    };
+  }
 
   /* ========== PASAJERO ========== */
 
@@ -43,12 +58,16 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Crear pago para una reserva' })
   @ApiResponse({ status: 201, description: 'Pago iniciado.' })
   @ApiResponse({ status: 400, description: 'Reserva inválida o ya pagada.' })
-  async createPayment(@User() user: JwtPayload, @Body() dto: CreatePaymentDto) {
-    // TODO:
-    // 1. Validar que el booking pertenece al pasajero
-    // 2. Validar que no existe ya un pago para ese booking
-    // 3. Crear payment con status PENDING
-    return this.paymentsService.createPayment(user.sub, dto);
+  async createPayment(
+    @User() user: JwtPayload,
+    @Body() dto: CreatePaymentDto,
+    @Req() req: Request,
+  ) {
+    return this.paymentsService.createPayment(
+      user.sub,
+      dto,
+      this.getAuthContext(req),
+    );
   }
 
   /**
@@ -103,13 +122,13 @@ export class PaymentsController {
   async createPaypalOrder(
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
   ) {
-    // TODO:
-    // 1. Validar que el pago pertenece al pasajero
-    // 2. Llamar a PayPal API para crear orden
-    // 3. Guardar paypalOrderId
-    // 4. Retornar approvalUrl
-    return this.paymentsService.createPaypalOrder(user.sub, id);
+    return this.paymentsService.createPaypalOrder(
+      user.sub,
+      id,
+      this.getAuthContext(req),
+    );
   }
 
   /**
@@ -129,17 +148,14 @@ export class PaymentsController {
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CapturePaypalDto,
+    @Req() req: Request,
   ) {
     // TODO:
-    // 1. Validar que el pago pertenece al pasajero
-    // 2. Llamar a PayPal API para capturar
-    // 3. Validar respuesta de PayPal (COMPLETED)
-    // 4. Actualizar status a PAID y paidAt
-    // 5. Guardar paypalCaptureId
     return this.paymentsService.capturePaypalOrder(
       user.sub,
       id,
       dto.paypalOrderId,
+      this.getAuthContext(req),
     );
   }
 
@@ -157,7 +173,6 @@ export class PaymentsController {
     @User() user: JwtPayload,
     @Query('status') status?: string,
   ) {
-    // TODO: Obtener pagos de bookings en rutas del conductor
     return this.paymentsService.getDriverPayments(user.sub, status);
   }
 
@@ -181,11 +196,6 @@ export class PaymentsController {
     return this.paymentsService.getAllPayments(page, limit, status);
   }
 
-  /**
-   * Revertir un pago (admin)
-   * - Reversión total o parcial
-   * - Actualiza status a REVERSED
-   */
   @Roles(RolUsuarioEnum.ADMIN)
   @Patch(':id/reverse')
   @ApiOperation({ summary: 'Revertir un pago' })
@@ -194,12 +204,12 @@ export class PaymentsController {
   async reversePayment(
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
   ) {
-    // TODO:
-    // 1. Validar que el pago está en status PAID
-    // 2. Si es PayPal, llamar a refund API
-    // 3. Actualizar status a REVERSED
-    // 4. Registrar reversedAt
-    return this.paymentsService.reversePayment(id);
+    return this.paymentsService.reversePayment(
+      id,
+      user.sub,
+      this.getAuthContext(req),
+    );
   }
 }

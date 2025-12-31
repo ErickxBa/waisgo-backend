@@ -22,7 +22,10 @@
     "migration:generate": "npm run typeorm -- -d ormconfig.migration.ts migration:generate",
     "migration:create": "npm run typeorm -- -d ormconfig.migration.ts migration:create",
     "migration:run": "npm run typeorm -- -d ormconfig.migration.ts migration:run",
-    "migration:revert": "npm run typeorm -- -d ormconfig.migration.ts migration:revert"
+    "migration:revert": "npm run typeorm -- -d ormconfig.migration.ts migration:revert",
+    "seed": "ts-node -r tsconfig-paths/register src/seeds/seed-cli.ts",
+    "seed:clean": "npm run seed -- --clean",
+    "seed:reset": "npm run seed -- --reset"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.0.2",
@@ -48,6 +51,7 @@
     "joi": "^18.0.2",
     "jose": "^4.15.5",
     "minio": "^8.0.6",
+    "nest-commander": "^3.20.1",
     "nodemailer": "^6.9.13",
     "oci-objectstorage": "^2.122.2",
     "oci-sdk": "^2.122.2",

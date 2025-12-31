@@ -12,6 +12,7 @@ import { IS_PUBLIC_KEY } from 'src/modules/common/Decorators';
 import { RedisService } from 'src/redis/redis.service';
 import type { Request } from 'express';
 import { RolUsuarioEnum } from '../Enum';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 interface JwtPayloadInternal {
   sub: string;
@@ -57,7 +58,7 @@ export class JweAuthGuard implements CanActivate {
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
-      throw new UnauthorizedException('Token requerido');
+      throw new UnauthorizedException(ErrorMessages.SYSTEM.TOKEN_REQUIRED);
     }
 
     try {
@@ -70,17 +71,17 @@ export class JweAuthGuard implements CanActivate {
 
       // Validar campos requeridos
       if (!jwtPayload.sub || !jwtPayload.jti || !jwtPayload.role) {
-        throw new UnauthorizedException('Token malformado');
+        throw new UnauthorizedException(ErrorMessages.SYSTEM.TOKEN_MALFORMED);
       }
 
       if (jwtPayload.exp && jwtPayload.exp < Math.floor(Date.now() / 1000)) {
-        throw new UnauthorizedException('Token expirado');
+        throw new UnauthorizedException(ErrorMessages.SYSTEM.TOKEN_EXPIRED);
       }
 
       // Verificar si el token ha sido revocado individualmente
       const isRevoked = await this.redisService.isTokenRevoked(jwtPayload.jti);
       if (isRevoked) {
-        throw new UnauthorizedException('Token revocado');
+        throw new UnauthorizedException(ErrorMessages.SYSTEM.TOKEN_REVOKED);
       }
 
       // Verificar si todas las sesiones del usuario han sido revocadas
@@ -89,9 +90,7 @@ export class JweAuthGuard implements CanActivate {
         jwtPayload.iat,
       );
       if (isUserSessionRevoked) {
-        throw new UnauthorizedException(
-          'Sesión expirada por cambio de contraseña',
-        );
+        throw new UnauthorizedException(ErrorMessages.SYSTEM.SESSION_EXPIRED);
       }
 
       request.user = {
@@ -112,7 +111,7 @@ export class JweAuthGuard implements CanActivate {
       this.logger.warn(
         `Token validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      throw new UnauthorizedException('Token inválido o expirado');
+      throw new UnauthorizedException(ErrorMessages.SYSTEM.INVALID_TOKEN);
     }
   }
 

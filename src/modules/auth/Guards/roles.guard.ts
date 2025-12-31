@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { RolUsuarioEnum } from '../Enum';
 import { ROLES_KEY } from 'src/modules/common/Decorators';
 import type { Request } from 'express';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -33,7 +34,7 @@ export class RolesGuard implements CanActivate {
       this.logger.warn(
         'Usuario sin rol identificado intentó acceder a un recurso protegido por roles.',
       );
-      throw new ForbiddenException('Rol no identificado');
+      throw new ForbiddenException(ErrorMessages.SYSTEM.ROLE_NOT_IDENTIFIED);
     }
 
     if (!requiredRoles.includes(user.role)) {
@@ -42,7 +43,7 @@ export class RolesGuard implements CanActivate {
           ', ',
         )}`,
       );
-      throw new ForbiddenException('Acceso denegado para su rol');
+      throw new ForbiddenException(ErrorMessages.SYSTEM.ACCESS_DENIED_ROLE);
     }
 
     return true;

@@ -30,7 +30,9 @@ export class VerificationService {
     const validate = isUUID as unknown as (str: string) => boolean;
 
     if (!validate(userId)) {
-      throw new BadRequestException('ID de usuario inválido');
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT('userId'),
+      );
     }
   }
 

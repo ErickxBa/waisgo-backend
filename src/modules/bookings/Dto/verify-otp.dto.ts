@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, Length, Matches } from 'class-validator';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 export class VerifyOtpDto {
   @ApiProperty({
@@ -8,6 +9,6 @@ export class VerifyOtpDto {
   })
   @IsString()
   @Length(6, 6)
-  @Matches(/^\d{6}$/, { message: 'El OTP debe ser de 6 dígitos numéricos' })
+  @Matches(/^\d{6}$/, { message: ErrorMessages.TRIP_OTP.OTP_FORMAT_INVALID })
   otp: string;
 }

@@ -8,6 +8,7 @@ import {
 import { Client } from 'minio';
 import * as path from 'node:path';
 import { StorageProvider } from './Interface/storage.interface';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
 
 @Injectable()
 export class MinioStorageService implements OnModuleInit, StorageProvider {
@@ -39,7 +40,7 @@ export class MinioStorageService implements OnModuleInit, StorageProvider {
       return objectPath;
     } catch (error) {
       this.logger.error(error.message, error.stack);
-      throw new InternalServerErrorException('Error al subir el archivo');
+      throw new InternalServerErrorException(ErrorMessages.STORAGE.UPLOAD_FAILED);
     }
   }
 

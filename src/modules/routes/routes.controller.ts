@@ -9,7 +9,9 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -22,13 +24,26 @@ import { Roles, User } from '../common/Decorators';
 import { RolUsuarioEnum } from '../auth/Enum';
 import { RoutesService } from './routes.service';
 import { CreateRouteDto, SearchRoutesDto, AddStopDto } from './Dto';
-import type { JwtPayload } from '../common/types';
+import type { JwtPayload, AuthContext } from '../common/types';
 
 @ApiTags('Routes')
 @ApiBearerAuth('access-token')
 @Controller('routes')
 export class RoutesController {
   constructor(private readonly routesService: RoutesService) {}
+
+  private getAuthContext(req: Request): AuthContext {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ip =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : req.ip || req.socket?.remoteAddress || 'unknown';
+
+    return {
+      ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+    };
+  }
 
   /* ================= CONDUCTOR ================= */
 
@@ -47,13 +62,16 @@ export class RoutesController {
     status: 400,
     description: 'Datos inválidos o conductor bloqueado.',
   })
-  async createRoute(@User() user: JwtPayload, @Body() dto: CreateRouteDto) {
-    // TODO:
-    // 1. Validar que el conductor esté APROBADO
-    // 2. Validar que no tenga rating < 3.0
-    // 3. Crear ruta con estado ACTIVA
-    // 4. Crear route_stops ordenados
-    return this.routesService.createRoute(user.sub, dto);
+  async createRoute(
+    @User() user: JwtPayload,
+    @Body() dto: CreateRouteDto,
+    @Req() req: Request,
+  ) {
+    return this.routesService.createRoute(
+      user.sub,
+      dto,
+      this.getAuthContext(req),
+    );
   }
 
   /**
@@ -90,11 +108,6 @@ export class RoutesController {
     @User() user: JwtPayload,
     @Query() dto: SearchRoutesDto,
   ) {
-    // TODO:
-    // 1. Recorrer route_stops de rutas ACTIVAS
-    // 2. Calcular distancia con Haversine
-    // 3. Filtrar las que tengan stops dentro del radio
-    // 4. Solo rutas con asientos disponibles > 0
     return this.routesService.getAvailableRoutes(dto);
   }
 
@@ -113,7 +126,7 @@ export class RoutesController {
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.routesService.getRouteById(id);
+    return this.routesService.getRouteById(user.sub, id);
   }
 
   /**
@@ -130,9 +143,7 @@ export class RoutesController {
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    // TODO: Solo retornar stops ordenados con lat/lng
-    // El frontend construye el mapa visual
-    return this.routesService.getRouteMap(id);
+    return this.routesService.getRouteMap(user.sub, id);
   }
 
   /**
@@ -149,12 +160,14 @@ export class RoutesController {
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddStopDto,
+    @Req() req: Request,
   ) {
-    // TODO:
-    // 1. Validar que la ruta pertenezca al conductor
-    // 2. Validar que la ruta esté ACTIVA
-    // 3. Agregar stop y recalcular orden
-    return this.routesService.addRouteStop(user.sub, id, dto);
+    return this.routesService.addRouteStop(
+      user.sub,
+      id,
+      dto,
+      this.getAuthContext(req),
+    );
   }
 
   /* ================= CONDUCTOR - GESTIÓN ================= */
@@ -173,14 +186,13 @@ export class RoutesController {
   async cancelRoute(
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
   ) {
-    // TODO:
-    // 1. Validar que la ruta pertenezca al conductor
-    // 2. Cambiar estado a CANCELADA
-    // 3. Cancelar todos los bookings
-    // 4. Revertir pagos digitales
-    // 5. Aplicar penalización al conductor
-    return this.routesService.cancelRoute(user.sub, id);
+    return this.routesService.cancelRoute(
+      user.sub,
+      id,
+      this.getAuthContext(req),
+    );
   }
 
   /**
@@ -196,11 +208,12 @@ export class RoutesController {
   async finalizeRoute(
     @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
   ) {
-    // TODO:
-    // 1. Validar que la ruta pertenezca al conductor
-    // 2. Validar que todos los bookings estén COMPLETADA o NO_SHOW
-    // 3. Cambiar estado a FINALIZADA
-    return this.routesService.finalizeRoute(user.sub, id);
+    return this.routesService.finalizeRoute(
+      user.sub,
+      id,
+      this.getAuthContext(req),
+    );
   }
 }

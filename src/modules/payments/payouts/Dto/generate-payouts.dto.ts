@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, Matches } from 'class-validator';
+import { ErrorMessages } from '../../../common/constants/error-messages.constant';
 
 export class GeneratePayoutsDto {
   @ApiProperty({
@@ -8,7 +9,7 @@ export class GeneratePayoutsDto {
   })
   @IsString()
   @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
-    message: 'El periodo debe estar en formato YYYY-MM',
+    message: ErrorMessages.PAYOUTS.INVALID_PERIOD,
   })
   period: string;
 }

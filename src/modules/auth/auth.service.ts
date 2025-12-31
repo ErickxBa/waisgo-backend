@@ -224,7 +224,7 @@ export class AuthService {
       this.logger.error(
         `${error instanceof Error ? error.name : 'Error'}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
       );
-      throw new InternalServerErrorException('Error inesperado en login');
+      throw new InternalServerErrorException(ErrorMessages.SYSTEM.INTERNAL_ERROR);
     }
   }
 

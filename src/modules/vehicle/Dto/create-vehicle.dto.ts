@@ -19,7 +19,7 @@ export class CreateVehicleDto {
     maxLength: 15,
   })
   @IsString()
-  @IsNotEmpty({ message: 'La marca es requerida' })
+  @IsNotEmpty({ message: ErrorMessages.VALIDATION.REQUIRED_FIELD('marca') })
   @MinLength(2, { message: ErrorMessages.DRIVER.VEHICLE_BRAND_LENGTH })
   @MaxLength(15, { message: ErrorMessages.DRIVER.VEHICLE_BRAND_LENGTH })
   marca: string;
@@ -31,7 +31,7 @@ export class CreateVehicleDto {
     maxLength: 15,
   })
   @IsString()
-  @IsNotEmpty({ message: 'El modelo es requerido' })
+  @IsNotEmpty({ message: ErrorMessages.VALIDATION.REQUIRED_FIELD('modelo') })
   @MinLength(2, { message: ErrorMessages.DRIVER.VEHICLE_MODEL_LENGTH })
   @MaxLength(15, { message: ErrorMessages.DRIVER.VEHICLE_MODEL_LENGTH })
   modelo: string;
@@ -43,7 +43,7 @@ export class CreateVehicleDto {
     maxLength: 10,
   })
   @IsString()
-  @IsNotEmpty({ message: 'El color es requerido' })
+  @IsNotEmpty({ message: ErrorMessages.VALIDATION.REQUIRED_FIELD('color') })
   @MinLength(3, { message: ErrorMessages.DRIVER.VEHICLE_COLOR_LENGTH })
   @MaxLength(10, { message: ErrorMessages.DRIVER.VEHICLE_COLOR_LENGTH })
   color: string;
@@ -53,7 +53,7 @@ export class CreateVehicleDto {
     example: 'ABC1234',
   })
   @IsString()
-  @IsNotEmpty({ message: 'La placa es requerida' })
+  @IsNotEmpty({ message: ErrorMessages.VALIDATION.REQUIRED_FIELD('placa') })
   @Matches(/^[A-Z]{3}\d{4}$/, {
     message: ErrorMessages.DRIVER.PLATE_FORMAT,
   })
@@ -65,7 +65,9 @@ export class CreateVehicleDto {
     minimum: 1,
     maximum: 6,
   })
-  @IsInt({ message: 'Los asientos deben ser un número entero' })
+  @IsInt({
+    message: ErrorMessages.VALIDATION.INVALID_FORMAT('asientosDisponibles'),
+  })
   @Min(1, { message: ErrorMessages.DRIVER.SEATS_RANGE })
   @Max(6, { message: ErrorMessages.DRIVER.SEATS_RANGE })
   asientosDisponibles: number;

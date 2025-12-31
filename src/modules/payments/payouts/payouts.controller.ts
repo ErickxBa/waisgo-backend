@@ -9,7 +9,9 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -22,13 +24,26 @@ import { RolUsuarioEnum } from 'src/modules/auth/Enum';
 import { Roles, User } from 'src/modules/common/Decorators';
 import { PayoutsService } from './payouts.service';
 import { GeneratePayoutsDto } from './Dto';
-import type { JwtPayload } from 'src/modules/common/types';
+import type { JwtPayload, AuthContext } from 'src/modules/common/types';
 
 @ApiTags('Payouts')
 @ApiBearerAuth('access-token')
 @Controller('payouts')
 export class PayoutsController {
   constructor(private readonly payoutsService: PayoutsService) {}
+
+  private getAuthContext(req: Request): AuthContext {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ip =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : req.ip || req.socket?.remoteAddress || 'unknown';
+
+    return {
+      ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+    };
+  }
 
   /* ========== CONDUCTOR ========== */
 
@@ -80,13 +95,16 @@ export class PayoutsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Generar payouts para un periodo' })
   @ApiResponse({ status: 201, description: 'Payouts generados.' })
-  async generatePayouts(@Body() dto: GeneratePayoutsDto) {
-    // TODO:
-    // 1. Buscar todos los pagos PAID del periodo que no tengan payoutId
-    // 2. Agrupar por conductor (vía booking -> route -> driver)
-    // 3. Crear un payout por conductor
-    // 4. Asociar los payments al payout
-    return this.payoutsService.generatePayouts(dto.period);
+  async generatePayouts(
+    @User() user: JwtPayload,
+    @Body() dto: GeneratePayoutsDto,
+    @Req() req: Request,
+  ) {
+    return this.payoutsService.generatePayouts(
+      dto.period,
+      user.sub,
+      this.getAuthContext(req),
+    );
   }
 
   /**
@@ -101,14 +119,16 @@ export class PayoutsController {
   @ApiParam({ name: 'id', description: 'ID del payout' })
   @ApiResponse({ status: 200, description: 'Payout ejecutado.' })
   @ApiResponse({ status: 400, description: 'Error al ejecutar payout.' })
-  async executePaypalPayout(@Param('id', ParseUUIDPipe) id: string) {
-    // TODO:
-    // 1. Obtener payout y validar status PENDING
-    // 2. Obtener PayPal email del conductor
-    // 3. Llamar a PayPal Payouts API
-    // 4. Guardar paypalBatchId
-    // 5. Actualizar status según respuesta
-    return this.payoutsService.executePaypalPayout(id);
+  async executePaypalPayout(
+    @User() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ) {
+    return this.payoutsService.executePaypalPayout(
+      id,
+      user.sub,
+      this.getAuthContext(req),
+    );
   }
 
   /**
@@ -120,10 +140,17 @@ export class PayoutsController {
   @ApiParam({ name: 'id', description: 'ID del payout' })
   @ApiResponse({ status: 200, description: 'Payout marcado como fallido.' })
   async failPayout(
+    @User() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
     @Body('reason') reason?: string,
   ) {
-    return this.payoutsService.failPayout(id, reason);
+    return this.payoutsService.failPayout(
+      id,
+      reason,
+      user.sub,
+      this.getAuthContext(req),
+    );
   }
 
   /**
