@@ -6,18 +6,20 @@ import {
 import { BookingsService } from './bookings.service';
 import { EstadoReservaEnum } from './Enums';
 import { EstadoRutaEnum } from '../routes/Enums';
-import { MetodoPagoEnum } from '../payments/Enums';
+import { EstadoPagoEnum, MetodoPagoEnum } from '../payments/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
 import { Route } from '../routes/Models/route.entity';
 import { Booking } from './Models/booking.entity';
 import { RouteStop } from '../routes/Models/route-stop.entity';
 import * as routeTimeUtil from '../common/utils/route-time.util';
+import { AuditAction } from '../audit/Enums';
 
 describe('BookingsService', () => {
   const bookingRepository = {
     findOne: jest.fn(),
     count: jest.fn(),
+    save: jest.fn(),
     manager: {
       transaction: jest.fn(),
     },
@@ -314,5 +316,123 @@ describe('BookingsService', () => {
     await expect(
       service.cancelBooking('passenger-id', 'BKG_123', context),
     ).rejects.toThrow(ErrorMessages.BOOKINGS.CANCELLATION_TOO_LATE);
+  });
+
+  it('cancels booking and marks pending payment failed', async () => {
+    const booking = {
+      id: 'booking-id',
+      passengerId: 'passenger-id',
+      estado: EstadoReservaEnum.CONFIRMADA,
+      routeId: 'route-id',
+      route: { fecha: '2025-01-01', horaSalida: '10:00' },
+    };
+    bookingRepository.findOne.mockResolvedValue(booking);
+
+    const bookingRepo = { update: jest.fn() };
+    const routeRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'route-id',
+        asientosDisponibles: 1,
+        asientosTotales: 2,
+      }),
+      save: jest.fn(),
+    };
+    bookingRepository.manager.transaction.mockImplementation(async (work) =>
+      work({
+        getRepository: jest.fn((entity) => {
+          if (entity === Booking) return bookingRepo;
+          if (entity === Route) return routeRepo;
+          return null;
+        }),
+      } as never),
+    );
+
+    const departureSpy = jest
+      .spyOn(routeTimeUtil, 'getDepartureDate')
+      .mockReturnValue(new Date(Date.now() + 2 * 60 * 60 * 1000));
+
+    const payment = {
+      id: 'payment-id',
+      bookingId: 'booking-id',
+      status: EstadoPagoEnum.PENDING,
+    };
+    paymentRepository.findOne.mockResolvedValue(payment);
+    paymentRepository.save.mockResolvedValue(payment);
+
+    const response = await service.cancelBooking(
+      'passenger-id',
+      'BKG_123',
+      context,
+    );
+
+    expect(response).toEqual({
+      message: ErrorMessages.BOOKINGS.CANCELLATION_SUCCESS,
+    });
+    expect(payment.status).toBe(EstadoPagoEnum.FAILED);
+    expect(payment.failureReason).toBe('Booking cancelled');
+    expect(paymentRepository.save).toHaveBeenCalled();
+
+    departureSpy.mockRestore();
+  });
+
+  it('rejects invalid OTP and logs audit', async () => {
+    driverRepository.findOne.mockResolvedValue({ id: 'driver-id' });
+    bookingRepository.findOne.mockResolvedValue({
+      id: 'booking-id',
+      routeId: 'route-id',
+      route: { driverId: 'driver-id' },
+      estado: EstadoReservaEnum.CONFIRMADA,
+      otpUsado: false,
+      otp: '123456',
+    });
+
+    await expect(
+      service.verifyOtp(
+        'driver-user',
+        'BKG_123',
+        '999999',
+        context,
+      ),
+    ).rejects.toThrow(ErrorMessages.TRIP_OTP.OTP_INVALID);
+
+    expect(auditService.logEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.TRIP_OTP_INVALID,
+      }),
+    );
+  });
+
+  it('completes booking and finalizes route when ready', async () => {
+    driverRepository.findOne.mockResolvedValue({ id: 'driver-id' });
+    bookingRepository.findOne.mockResolvedValue({
+      id: 'booking-id',
+      routeId: 'route-id',
+      route: { driverId: 'driver-id' },
+      estado: EstadoReservaEnum.CONFIRMADA,
+      otpUsado: true,
+    });
+    bookingRepository.save.mockResolvedValue({});
+    bookingRepository.count.mockResolvedValue(0);
+    routeRepository.findOne.mockResolvedValue({
+      id: 'route-id',
+      estado: EstadoRutaEnum.ACTIVA,
+    });
+    routeRepository.save.mockResolvedValue({});
+
+    const response = await service.completeBooking(
+      'driver-user',
+      'BKG_123',
+      context,
+    );
+
+    expect(response).toEqual({
+      message: ErrorMessages.BOOKINGS.BOOKING_COMPLETED,
+    });
+    expect(routeRepository.save).toHaveBeenCalled();
+    expect(auditService.logEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.ROUTE_COMPLETED,
+      }),
+    );
   });
 });

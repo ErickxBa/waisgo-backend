@@ -3,6 +3,7 @@ import { DriversService } from './drivers.service';
 import { EstadoConductorEnum, TipoDocumentoEnum } from './Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
+import * as publicIdUtil from '../common/utils/public-id.util';
 
 describe('DriversService', () => {
   const driverRepo = {
@@ -153,5 +154,135 @@ describe('DriversService', () => {
         context,
       ),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('throws when business user is missing on apply', async () => {
+    businessUserRepo.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.applyAsDriver('user-id', 'driver@epn.edu.ec', context),
+    ).rejects.toThrow(ErrorMessages.USER.NOT_FOUND);
+  });
+
+  it('rejects when a request is already pending', async () => {
+    businessUserRepo.findOne.mockResolvedValue({
+      id: 'user-id',
+      email: 'driver@epn.edu.ec',
+      alias: 'Alias',
+      profile: null,
+    });
+    driverRepo.findOne.mockResolvedValue({
+      id: 'driver-id',
+      estado: EstadoConductorEnum.PENDIENTE,
+    });
+
+    await expect(
+      service.applyAsDriver('user-id', 'driver@epn.edu.ec', context),
+    ).rejects.toThrow(ErrorMessages.DRIVER.REQUEST_PENDING);
+  });
+
+  it('reapplies after rejection cooldown', async () => {
+    const rejectedDriver = {
+      id: 'driver-id',
+      publicId: 'DRV_OLD',
+      estado: EstadoConductorEnum.RECHAZADO,
+      fechaRechazo: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    };
+    businessUserRepo.findOne.mockResolvedValue({
+      id: 'user-id',
+      email: 'driver@epn.edu.ec',
+      alias: 'Alias',
+      profile: { nombre: 'Ana', apellido: 'Perez' },
+    });
+    driverRepo.findOne.mockResolvedValue(rejectedDriver);
+    driverRepo.save.mockResolvedValue(rejectedDriver);
+    authService.getAdminEmails.mockResolvedValue([]);
+
+    const response = await service.applyAsDriver(
+      'user-id',
+      'driver@epn.edu.ec',
+      context,
+    );
+
+    expect(response).toEqual({
+      message: ErrorMessages.DRIVER.APPLICATION_RESUBMITTED,
+      driverId: 'DRV_OLD',
+    });
+    expect(rejectedDriver.estado).toBe(EstadoConductorEnum.PENDIENTE);
+    expect(auditService.logEvent).toHaveBeenCalled();
+  });
+
+  it('creates a new driver application', async () => {
+    businessUserRepo.findOne.mockResolvedValue({
+      id: 'user-id',
+      email: 'driver@epn.edu.ec',
+      alias: 'Alias',
+      profile: { nombre: 'Ana', apellido: 'Perez' },
+    });
+    driverRepo.findOne.mockResolvedValue(null);
+    driverRepo.create.mockImplementation((input) => ({ ...input }));
+    driverRepo.save.mockImplementation(async (input) => ({
+      ...input,
+      id: 'driver-id',
+      publicId: 'DRV_NEW',
+    }));
+    authService.getAdminEmails.mockResolvedValue([]);
+
+    const publicIdSpy = jest
+      .spyOn(publicIdUtil, 'generatePublicId')
+      .mockResolvedValue('DRV_NEW');
+
+    const response = await service.applyAsDriver(
+      'user-id',
+      'driver@epn.edu.ec',
+      context,
+    );
+
+    expect(response).toEqual({
+      message: ErrorMessages.DRIVER.APPLICATION_SUBMITTED,
+      driverId: 'DRV_NEW',
+    });
+    expect(auditService.logEvent).toHaveBeenCalled();
+
+    publicIdSpy.mockRestore();
+  });
+
+  it('uploads a new document when driver is pending', async () => {
+    const file = {
+      size: 100,
+      mimetype: 'image/png',
+      buffer: Buffer.from('x'),
+    } as Express.Multer.File;
+    driverRepo.findOne.mockResolvedValue({
+      id: 'driver-id',
+      estado: EstadoConductorEnum.PENDIENTE,
+    });
+    configService.get.mockReturnValue('bucket');
+    storageService.upload.mockResolvedValue('driver/doc.png');
+    documentRepo.findOne.mockResolvedValue(null);
+    documentRepo.create.mockImplementation((input) => ({ ...input }));
+    documentRepo.save.mockResolvedValue({
+      id: 'doc-id',
+      publicId: 'DOC_123',
+    });
+
+    const publicIdSpy = jest
+      .spyOn(publicIdUtil, 'generatePublicId')
+      .mockResolvedValue('DOC_123');
+
+    const response = await service.uploadDocument(
+      'user-id',
+      TipoDocumentoEnum.LICENCIA,
+      file,
+      context,
+    );
+
+    expect(response).toEqual({
+      message: ErrorMessages.DRIVER.DOCUMENT_UPLOADED,
+      documentId: 'DOC_123',
+    });
+    expect(auditService.logEvent).toHaveBeenCalled();
+
+    publicIdSpy.mockRestore();
   });
 });

@@ -272,4 +272,63 @@ describe('PaymentsService', () => {
     });
     expect(payment.status).toBe(EstadoPagoEnum.PAID);
   });
+
+  it('getDriverPayments throws when user is not a driver', async () => {
+    driverRepo.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.getDriverPayments('user-id'),
+    ).rejects.toThrow(ErrorMessages.DRIVER.NOT_A_DRIVER);
+  });
+
+  it('reversePayment throws when payment is missing', async () => {
+    paymentRepo.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.reversePayment('PAY_123'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('reversePayment marks payment failed when refund fails', async () => {
+    const payment = {
+      id: 'payment-id',
+      status: EstadoPagoEnum.PAID,
+      method: MetodoPagoEnum.PAYPAL,
+      paypalCaptureId: 'CAPTURE_123',
+    } as Payment;
+
+    paymentRepo.findOne.mockResolvedValue(payment);
+    paymentRepo.save.mockResolvedValue(payment);
+    paypalClient.request.mockRejectedValue(new Error('refund-failed'));
+
+    await expect(
+      service.reversePayment('PAY_123'),
+    ).rejects.toThrow(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
+
+    expect(payment.status).toBe(EstadoPagoEnum.FAILED);
+    expect(paymentRepo.save).toHaveBeenCalled();
+  });
+
+  it('reversePayment marks payment reversed when paid', async () => {
+    const payment = {
+      id: 'payment-id',
+      status: EstadoPagoEnum.PAID,
+      method: MetodoPagoEnum.EFECTIVO,
+    } as Payment;
+
+    paymentRepo.findOne.mockResolvedValue(payment);
+    paymentRepo.save.mockResolvedValue(payment);
+
+    const response = await service.reversePayment(
+      'PAY_123',
+      'admin-id',
+      { ip: '127.0.0.1', userAgent: 'jest' },
+    );
+
+    expect(response).toEqual({
+      message: ErrorMessages.PAYMENTS.PAYMENT_REVERSED,
+    });
+    expect(payment.status).toBe(EstadoPagoEnum.REVERSED);
+    expect(auditService.logEvent).toHaveBeenCalled();
+  });
 });
