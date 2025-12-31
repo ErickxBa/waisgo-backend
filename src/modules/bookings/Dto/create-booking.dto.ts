@@ -1,20 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsUUID,
   IsEnum,
+  IsString,
   IsNumber,
   IsOptional,
   Min,
   Max,
 } from 'class-validator';
 import { MetodoPagoEnum } from '../../payments/Enums/metodo-pago.enum';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
+import { IsExternalIdentifier } from '../../common/validators/external-id.validator';
 
 export class CreateBookingDto {
   @ApiProperty({
     description: 'ID de la ruta a reservar',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
-  @IsUUID('4')
+  @IsString()
+  @IsExternalIdentifier({
+    message: ErrorMessages.VALIDATION.INVALID_FORMAT('routeId'),
+  })
   routeId: string;
 
   @ApiProperty({

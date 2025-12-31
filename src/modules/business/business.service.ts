@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import type { AuthContext } from '../common/types';
+import { generatePublicId } from '../common/utils/public-id.util';
 
 @Injectable()
 export class BusinessService {
@@ -38,11 +39,14 @@ export class BusinessService {
       apellido: string;
       celular: string;
     },
-  ): Promise<void> {
+  ): Promise<{ publicId: string; alias: string }> {
+    const publicId = await generatePublicId(this.businessUserRepo, 'USR');
+    const alias = this.generateAlias();
     const businessUser = this.businessUserRepo.create({
       id: userId,
+      publicId,
       email: data.email,
-      alias: this.generateAlias(),
+      alias,
     });
 
     const profile = this.profileRepo.create({
@@ -57,6 +61,8 @@ export class BusinessService {
     await this.businessUserRepo.save(businessUser);
 
     this.logger.log(`Business user created: ${userId}`);
+
+    return { publicId, alias };
   }
 
   /**
@@ -71,11 +77,15 @@ export class BusinessService {
       apellido: string;
       celular: string;
     },
-  ): Promise<void> {
+  ): Promise<{ publicId: string; alias: string }> {
+    const businessRepo = manager.getRepository(BusinessUser);
+    const publicId = await generatePublicId(businessRepo, 'USR');
+    const alias = this.generateAlias();
     const businessUser = manager.create(BusinessUser, {
       id: userId,
+      publicId,
       email: data.email,
-      alias: this.generateAlias(),
+      alias,
     });
 
     const profile = manager.create(UserProfile, {
@@ -90,6 +100,8 @@ export class BusinessService {
     await manager.save(businessUser);
 
     this.logger.log(`Business user created with transaction: ${userId}`);
+
+    return { publicId, alias };
   }
 
   async updateProfile(
@@ -209,6 +221,8 @@ export class BusinessService {
 
     return {
       id: user.id,
+      publicId: user.publicId,
+      alias: user.alias,
       email: user.email,
       nombre: user.profile.nombre,
       apellido: user.profile.apellido,

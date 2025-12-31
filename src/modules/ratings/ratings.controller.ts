@@ -1,11 +1,11 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
   Param,
   Body,
   Query,
-  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Req,
@@ -24,12 +24,23 @@ import { RolUsuarioEnum } from '../auth/Enum';
 import { RatingsService } from './ratings.service';
 import { CreateRatingDto } from './Dto';
 import type { JwtPayload, AuthContext } from '../common/types';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { isValidIdentifier } from '../common/utils/public-id.util';
 
 @ApiTags('Ratings')
 @ApiBearerAuth('access-token')
 @Controller('ratings')
 export class RatingsController {
   constructor(private readonly ratingsService: RatingsService) {}
+
+  private validateIdentifier(value: string, field = 'id'): string {
+    if (!isValidIdentifier(value)) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT(field),
+      );
+    }
+    return value;
+  }
 
   private getAuthContext(req: Request): AuthContext {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -140,9 +151,10 @@ export class RatingsController {
   })
   async canRateRoute(
     @User() user: JwtPayload,
-    @Param('routeId', ParseUUIDPipe) routeId: string,
+    @Param('routeId') routeId: string,
   ) {
-    return this.ratingsService.canRateRoute(user.sub, routeId);
+    const safeRouteId = this.validateIdentifier(routeId, 'routeId');
+    return this.ratingsService.canRateRoute(user.sub, safeRouteId);
   }
 
   /* ========== ADMIN ========== */

@@ -25,6 +25,9 @@ export class Booking {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 12, unique: true })
+  publicId: string;
+
   @Column({ type: 'uuid' })
   routeId: string;
 

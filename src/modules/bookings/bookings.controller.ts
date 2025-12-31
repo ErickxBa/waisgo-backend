@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -6,12 +7,12 @@ import {
   Param,
   Body,
   Query,
-  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -24,12 +25,23 @@ import { RolUsuarioEnum } from '../auth/Enum';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto, VerifyOtpDto } from './Dto';
 import type { JwtPayload, AuthContext } from '../common/types';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { isValidIdentifier } from '../common/utils/public-id.util';
 
 @ApiTags('Bookings')
 @ApiBearerAuth('access-token')
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
+
+  private validateIdentifier(value: string, field = 'id'): string {
+    if (!isValidIdentifier(value)) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT(field),
+      );
+    }
+    return value;
+  }
 
   private getAuthContext(req: Request): AuthContext {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -84,9 +96,10 @@ export class BookingsController {
   @ApiResponse({ status: 404, description: 'Reserva no encontrada.' })
   async getBookingById(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ) {
-    return this.bookingsService.getBookingById(user.sub, id);
+    const safeId = this.validateIdentifier(id);
+    return this.bookingsService.getBookingById(user.sub, safeId);
   }
 
   @Roles(RolUsuarioEnum.PASAJERO)
@@ -97,12 +110,13 @@ export class BookingsController {
   @ApiResponse({ status: 400, description: 'No se puede cancelar.' })
   async cancelBooking(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.bookingsService.cancelBooking(
       user.sub,
-      id,
+      safeId,
       this.getAuthContext(req),
     );
   }
@@ -115,9 +129,10 @@ export class BookingsController {
   @ApiResponse({ status: 403, description: 'Reserva no activa, sin acceso.' })
   async getBookingMap(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ) {
-    return this.bookingsService.getBookingMap(user.sub, id);
+    const safeId = this.validateIdentifier(id);
+    return this.bookingsService.getBookingMap(user.sub, safeId);
   }
 
   /* ================= CONDUCTOR ================= */
@@ -129,9 +144,10 @@ export class BookingsController {
   @ApiResponse({ status: 200, description: 'Listado de pasajeros.' })
   async getBookingsByRoute(
     @User() user: JwtPayload,
-    @Param('routeId', ParseUUIDPipe) routeId: string,
+    @Param('routeId') routeId: string,
   ) {
-    return this.bookingsService.getBookingsByRoute(user.sub, routeId);
+    const safeRouteId = this.validateIdentifier(routeId, 'routeId');
+    return this.bookingsService.getBookingsByRoute(user.sub, safeRouteId);
   }
 
   @Roles(RolUsuarioEnum.CONDUCTOR)
@@ -141,12 +157,13 @@ export class BookingsController {
   @ApiResponse({ status: 200, description: 'Pasajero marcado como llegado.' })
   async completeBooking(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.bookingsService.completeBooking(
       user.sub,
-      id,
+      safeId,
       this.getAuthContext(req),
     );
   }
@@ -159,12 +176,13 @@ export class BookingsController {
   @ApiResponse({ status: 400, description: 'Aun no han pasado 30 minutos.' })
   async markNoShow(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.bookingsService.markNoShow(
       user.sub,
-      id,
+      safeId,
       this.getAuthContext(req),
     );
   }
@@ -174,19 +192,21 @@ export class BookingsController {
   @Roles(RolUsuarioEnum.CONDUCTOR)
   @Post(':id/verify-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 6, ttl: 300000 } })
   @ApiOperation({ summary: 'Verificar OTP del pasajero' })
   @ApiParam({ name: 'id', description: 'ID de la reserva' })
   @ApiResponse({ status: 200, description: 'OTP validado correctamente.' })
   @ApiResponse({ status: 400, description: 'OTP invalido o ya usado.' })
   async verifyOtp(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Body() dto: VerifyOtpDto,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.bookingsService.verifyOtp(
       user.sub,
-      id,
+      safeId,
       dto.otp,
       this.getAuthContext(req),
     );

@@ -1,28 +1,55 @@
 import { DataSource } from 'typeorm';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import * as fs from 'fs';
 
-dotenv.config();
+const envPath = path.join(process.cwd(), '.env');
+dotenv.config({ path: envPath });
 
-const {
+const testEnvPath =
+  process.env.TEST_ENV_FILE || path.join(process.cwd(), '.env.test');
+const shouldUseTestEnv =
+  process.env.NODE_ENV === 'test' || Boolean(process.env.TEST_DB_HOST);
+if (shouldUseTestEnv && fs.existsSync(testEnvPath)) {
+  dotenv.config({ path: testEnvPath, override: true });
+}
+
+const isTestEnv = process.env.NODE_ENV === 'test';
+
+const resolveVar = (key: string, testKey: string): string | undefined => {
+  if (isTestEnv && process.env[testKey]) {
+    return process.env[testKey];
+  }
+  return process.env[key];
+};
+
+const DB_HOST = resolveVar('DB_HOST', 'TEST_DB_HOST');
+const DB_PORT = resolveVar('DB_PORT', 'TEST_DB_PORT');
+const DB_NAME = resolveVar('DB_NAME', 'TEST_DB_NAME');
+const DB_USERNAME = resolveVar('DB_USERNAME', 'TEST_DB_USERNAME');
+const DB_PASSWORD = resolveVar('DB_PASSWORD', 'TEST_DB_PASSWORD');
+const DB_SSL = resolveVar('DB_SSL', 'TEST_DB_SSL');
+const DB_MIGRATION_USERNAME =
+  (isTestEnv ? process.env.TEST_DB_MIGRATION_USERNAME : undefined) ||
+  process.env.DB_MIGRATION_USERNAME ||
+  DB_USERNAME;
+const DB_MIGRATION_PASSWORD =
+  (isTestEnv ? process.env.TEST_DB_MIGRATION_PASSWORD : undefined) ||
+  process.env.DB_MIGRATION_PASSWORD ||
+  DB_PASSWORD;
+
+const resolved = {
   DB_HOST,
   DB_PORT,
   DB_NAME,
   DB_MIGRATION_USERNAME,
   DB_MIGRATION_PASSWORD,
-  DB_USERNAME,
   DB_SSL,
-} = process.env;
+};
 
-const required = [
-  'DB_HOST',
-  'DB_PORT',
-  'DB_NAME',
-  'DB_MIGRATION_USERNAME',
-  'DB_MIGRATION_PASSWORD',
-  'DB_SSL',
-];
-const missing = required.filter((k) => !process.env[k]);
+const missing = Object.entries(resolved)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
 
 if (missing.length) {
   console.error(`[migration] Faltan variables: ${missing.join(', ')}`);
@@ -44,6 +71,9 @@ if (DB_MIGRATION_USERNAME === DB_USERNAME) {
 const isSslEnabled = DB_SSL === 'true';
 
 console.log(`[migration] Conectando como ${DB_MIGRATION_USERNAME}...`);
+if (isTestEnv) {
+  console.log(`[migration] NODE_ENV=test (DB=${DB_NAME})`);
+}
 console.log(`[migration] SSL habilitado: ${isSslEnabled}`);
 
 export const AppDataSource = new DataSource({

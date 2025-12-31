@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -6,12 +7,12 @@ import {
   Param,
   Body,
   Query,
-  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -19,18 +20,30 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { Roles, User } from '../common/Decorators';
 import { RolUsuarioEnum } from '../auth/Enum';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, CapturePaypalDto } from './Dto';
 import type { JwtPayload, AuthContext } from '../common/types';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { isValidIdentifier } from '../common/utils/public-id.util';
 
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
+
+  private validateIdentifier(value: string, field = 'id'): string {
+    if (!isValidIdentifier(value)) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT(field),
+      );
+    }
+    return value;
+  }
 
   private getAuthContext(req: Request): AuthContext {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -45,6 +58,17 @@ export class PaymentsController {
     };
   }
 
+  private getIdempotencyKey(req: Request): string | null {
+    const raw = req.headers['idempotency-key'];
+    if (Array.isArray(raw)) {
+      return raw[0] ?? null;
+    }
+    if (typeof raw === 'string') {
+      return raw;
+    }
+    return null;
+  }
+
   /* ========== PASAJERO ========== */
 
   /**
@@ -55,7 +79,13 @@ export class PaymentsController {
   @Roles(RolUsuarioEnum.PASAJERO)
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 600000 } })
   @ApiOperation({ summary: 'Crear pago para una reserva' })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Clave idempotente para evitar pagos duplicados',
+  })
   @ApiResponse({ status: 201, description: 'Pago iniciado.' })
   @ApiResponse({ status: 400, description: 'Reserva inválida o ya pagada.' })
   async createPayment(
@@ -67,6 +97,7 @@ export class PaymentsController {
       user.sub,
       dto,
       this.getAuthContext(req),
+      this.getIdempotencyKey(req),
     );
   }
 
@@ -100,9 +131,10 @@ export class PaymentsController {
   @ApiResponse({ status: 404, description: 'Pago no encontrado.' })
   async getPaymentById(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ) {
-    return this.paymentsService.getPaymentById(user.sub, id);
+    const safeId = this.validateIdentifier(id);
+    return this.paymentsService.getPaymentById(user.sub, safeId);
   }
 
   /* ========== PAYPAL ========== */
@@ -116,18 +148,26 @@ export class PaymentsController {
   @Roles(RolUsuarioEnum.PASAJERO)
   @Post(':id/paypal/create')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
   @ApiOperation({ summary: 'Crear orden de PayPal' })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Clave idempotente para crear orden PayPal',
+  })
   @ApiParam({ name: 'id', description: 'ID del pago' })
   @ApiResponse({ status: 200, description: 'Orden PayPal creada.' })
   async createPaypalOrder(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.paymentsService.createPaypalOrder(
       user.sub,
-      id,
+      safeId,
       this.getAuthContext(req),
+      this.getIdempotencyKey(req),
     );
   }
 
@@ -140,22 +180,29 @@ export class PaymentsController {
   @Roles(RolUsuarioEnum.PASAJERO)
   @Post(':id/paypal/capture')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
   @ApiOperation({ summary: 'Capturar pago de PayPal' })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Clave idempotente para capturar pago PayPal',
+  })
   @ApiParam({ name: 'id', description: 'ID del pago' })
   @ApiResponse({ status: 200, description: 'Pago capturado correctamente.' })
   @ApiResponse({ status: 400, description: 'Pago no aprobado por PayPal.' })
   async capturePaypalOrder(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Body() dto: CapturePaypalDto,
     @Req() req: Request,
   ) {
-    // TODO:
+    const safeId = this.validateIdentifier(id);
     return this.paymentsService.capturePaypalOrder(
       user.sub,
-      id,
+      safeId,
       dto.paypalOrderId,
       this.getAuthContext(req),
+      this.getIdempotencyKey(req),
     );
   }
 
@@ -199,17 +246,25 @@ export class PaymentsController {
   @Roles(RolUsuarioEnum.ADMIN)
   @Patch(':id/reverse')
   @ApiOperation({ summary: 'Revertir un pago' })
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Clave idempotente para revertir un pago',
+  })
   @ApiParam({ name: 'id', description: 'ID del pago' })
   @ApiResponse({ status: 200, description: 'Pago revertido.' })
   async reversePayment(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.paymentsService.reversePayment(
-      id,
+      safeId,
       user.sub,
       this.getAuthContext(req),
+      this.getIdempotencyKey(req),
     );
   }
 }

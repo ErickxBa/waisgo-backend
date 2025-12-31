@@ -17,6 +17,8 @@ import { AuditService } from '../../audit/audit.service';
 import { AuditAction, AuditResult } from '../../audit/Enums';
 import { ErrorMessages } from '../../common/constants/error-messages.constant';
 import type { AuthContext } from '../../common/types';
+import { buildIdWhere, generatePublicId } from '../../common/utils/public-id.util';
+import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 
 type PaypalPayoutResponse = {
   batch_header?: {
@@ -39,6 +41,7 @@ export class PayoutsService {
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
   private getPayPalCredentials() {
@@ -153,7 +156,10 @@ export class PayoutsService {
     }
 
     const payout = await this.payoutRepository.findOne({
-      where: { id: payoutId, driverId: driver.id },
+      where: buildIdWhere<Payout>(payoutId).map((where) => ({
+        ...where,
+        driverId: driver.id,
+      })),
     });
 
     if (!payout) {
@@ -170,7 +176,22 @@ export class PayoutsService {
     period: string,
     adminUserId?: string,
     context?: AuthContext,
+    idempotencyKey?: string | null,
   ): Promise<{ message: string; created?: number }> {
+    const normalizedKey = this.idempotencyService.normalizeKey(
+      idempotencyKey || undefined,
+    );
+    const actorKey = adminUserId ?? 'system';
+    if (normalizedKey) {
+      const cached = await this.idempotencyService.get<{
+        message: string;
+        created?: number;
+      }>(`payouts:generate:${period}`, actorKey, normalizedKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const start = new Date(`${period}-01T00:00:00.000Z`);
     const end = new Date(start);
     end.setUTCMonth(start.getUTCMonth() + 1);
@@ -202,15 +223,17 @@ export class PayoutsService {
     let created = 0;
 
     await this.dataSource.transaction(async (manager) => {
+      const payoutRepo = manager.getRepository(Payout);
       for (const [driverId, group] of grouped.entries()) {
-        const payout = manager.create(Payout, {
+        const payout = payoutRepo.create({
+          publicId: await generatePublicId(payoutRepo, 'PYO'),
           driverId,
           period,
           amount: Number(group.total.toFixed(2)),
           status: EstadoPayoutEnum.PENDING,
         });
 
-        const savedPayout = await manager.save(payout);
+        const savedPayout = await payoutRepo.save(payout);
 
         if (group.paymentIds.length > 0) {
           await manager.update(
@@ -235,19 +258,45 @@ export class PayoutsService {
       });
     }
 
-    return {
+    const response = {
       message: ErrorMessages.PAYOUTS.PAYOUTS_GENERATED,
       created,
     };
+
+    if (normalizedKey) {
+      await this.idempotencyService.store(
+        `payouts:generate:${period}`,
+        actorKey,
+        normalizedKey,
+        response,
+      );
+    }
+
+    return response;
   }
 
   async executePaypalPayout(
     payoutId: string,
     adminUserId?: string,
     context?: AuthContext,
+    idempotencyKey?: string | null,
   ): Promise<{ message: string; paypalBatchId?: string }> {
+    const normalizedKey = this.idempotencyService.normalizeKey(
+      idempotencyKey || undefined,
+    );
+    const actorKey = adminUserId ?? 'system';
+    if (normalizedKey) {
+      const cached = await this.idempotencyService.get<{
+        message: string;
+        paypalBatchId?: string;
+      }>(`payouts:execute:${payoutId}`, actorKey, normalizedKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const payout = await this.payoutRepository.findOne({
-      where: { id: payoutId },
+      where: buildIdWhere<Payout>(payoutId),
       relations: ['driver'],
     });
 
@@ -268,7 +317,7 @@ export class PayoutsService {
     }
 
     try {
-      const response = await this.paypalRequest<PaypalPayoutResponse>(
+      const paypalResponse = await this.paypalRequest<PaypalPayoutResponse>(
         'POST',
         '/v1/payments/payouts',
         {
@@ -291,10 +340,11 @@ export class PayoutsService {
         },
       );
 
-      payout.paypalBatchId = response.batch_header?.payout_batch_id ?? null;
+      payout.paypalBatchId =
+        paypalResponse.batch_header?.payout_batch_id ?? null;
       payout.attempts += 1;
 
-      if (response.batch_header?.batch_status === 'SUCCESS') {
+      if (paypalResponse.batch_header?.batch_status === 'SUCCESS') {
         payout.status = EstadoPayoutEnum.PAID;
         payout.paidAt = new Date();
       }
@@ -312,10 +362,21 @@ export class PayoutsService {
         });
       }
 
-      return {
+      const result = {
         message: ErrorMessages.PAYOUTS.PAYOUT_SENT,
         paypalBatchId: payout.paypalBatchId ?? undefined,
       };
+
+      if (normalizedKey) {
+        await this.idempotencyService.store(
+          `payouts:execute:${payoutId}`,
+          actorKey,
+          normalizedKey,
+          result,
+        );
+      }
+
+      return result;
     } catch (error) {
       payout.attempts += 1;
       payout.status = EstadoPayoutEnum.FAILED;
@@ -343,9 +404,25 @@ export class PayoutsService {
     reason?: string,
     adminUserId?: string,
     context?: AuthContext,
+    idempotencyKey?: string | null,
   ): Promise<{ message: string }> {
+    const normalizedKey = this.idempotencyService.normalizeKey(
+      idempotencyKey || undefined,
+    );
+    const actorKey = adminUserId ?? 'system';
+    if (normalizedKey) {
+      const cached = await this.idempotencyService.get<{ message: string }>(
+        `payouts:fail:${payoutId}`,
+        actorKey,
+        normalizedKey,
+      );
+      if (cached) {
+        return cached;
+      }
+    }
+
     const payout = await this.payoutRepository.findOne({
-      where: { id: payoutId },
+      where: buildIdWhere<Payout>(payoutId),
     });
 
     if (!payout) {
@@ -368,9 +445,20 @@ export class PayoutsService {
       });
     }
 
-    return {
+    const response = {
       message: ErrorMessages.PAYOUTS.PAYOUT_FAILED,
     };
+
+    if (normalizedKey) {
+      await this.idempotencyService.store(
+        `payouts:fail:${payoutId}`,
+        actorKey,
+        normalizedKey,
+        response,
+      );
+    }
+
+    return response;
   }
 
   async getAllPayouts(

@@ -9,11 +9,13 @@ import { PayoutsService } from './payouts/payouts.service';
 import { Booking } from '../bookings/Models/booking.entity';
 import { Driver } from '../drivers/Models/driver.entity';
 import { AuditModule } from '../audit/audit.module';
+import { IdempotencyModule } from '../common/idempotency/idempotency.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Payment, Payout, Booking, Driver]),
     AuditModule,
+    IdempotencyModule,
   ],
   providers: [PaymentsService, PayoutsService],
   exports: [TypeOrmModule, PaymentsService],

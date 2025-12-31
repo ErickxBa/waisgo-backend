@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsUUID,
   IsInt,
   Min,
   Max,
@@ -9,20 +8,30 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ErrorMessages } from '../../common/constants/error-messages.constant';
+import {
+  IsExternalIdentifier,
+  IsUserIdentifier,
+} from '../../common/validators/external-id.validator';
 
 export class CreateRatingDto {
   @ApiProperty({
     description: 'ID de la ruta donde se realizó el viaje',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
-  @IsUUID('4')
+  @IsString()
+  @IsExternalIdentifier({
+    message: ErrorMessages.VALIDATION.INVALID_FORMAT('routeId'),
+  })
   routeId: string;
 
   @ApiProperty({
     description: 'ID del usuario a calificar',
     example: 'f1e2d3c4-b5a6-7890-abcd-ef1234567890',
   })
-  @IsUUID('4')
+  @IsString()
+  @IsUserIdentifier({
+    message: ErrorMessages.VALIDATION.INVALID_FORMAT('toUserId'),
+  })
   toUserId: string;
 
   @ApiProperty({

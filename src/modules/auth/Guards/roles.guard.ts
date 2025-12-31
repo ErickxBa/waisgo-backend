@@ -37,6 +37,16 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException(ErrorMessages.SYSTEM.ROLE_NOT_IDENTIFIED);
     }
 
+    if (
+      requiredRoles.some((role) => role !== RolUsuarioEnum.USER) &&
+      user.isVerified === false
+    ) {
+      this.logger.warn(
+        `Acceso denegado para usuario no verificado con rol: ${user.role}.`,
+      );
+      throw new ForbiddenException(ErrorMessages.USER.NOT_VERIFIED);
+    }
+
     if (!requiredRoles.includes(user.role)) {
       this.logger.warn(
         `Acceso denegado para el rol: ${user.role}. Se requieren roles: ${requiredRoles.join(

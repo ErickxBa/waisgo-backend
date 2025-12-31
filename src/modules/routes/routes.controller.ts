@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Patch,
@@ -6,7 +7,6 @@ import {
   Body,
   Param,
   Query,
-  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Req,
@@ -25,12 +25,23 @@ import { RolUsuarioEnum } from '../auth/Enum';
 import { RoutesService } from './routes.service';
 import { CreateRouteDto, SearchRoutesDto, AddStopDto } from './Dto';
 import type { JwtPayload, AuthContext } from '../common/types';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { isValidIdentifier } from '../common/utils/public-id.util';
 
 @ApiTags('Routes')
 @ApiBearerAuth('access-token')
 @Controller('routes')
 export class RoutesController {
   constructor(private readonly routesService: RoutesService) {}
+
+  private validateIdentifier(value: string, field = 'id'): string {
+    if (!isValidIdentifier(value)) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT(field),
+      );
+    }
+    return value;
+  }
 
   private getAuthContext(req: Request): AuthContext {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -124,9 +135,10 @@ export class RoutesController {
   @ApiResponse({ status: 404, description: 'Ruta no encontrada.' })
   async getRouteById(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ) {
-    return this.routesService.getRouteById(user.sub, id);
+    const safeId = this.validateIdentifier(id);
+    return this.routesService.getRouteById(user.sub, safeId);
   }
 
   /**
@@ -141,9 +153,10 @@ export class RoutesController {
   @ApiResponse({ status: 200, description: 'Coordenadas de stops.' })
   async getRouteMap(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ) {
-    return this.routesService.getRouteMap(user.sub, id);
+    const safeId = this.validateIdentifier(id);
+    return this.routesService.getRouteMap(user.sub, safeId);
   }
 
   /**
@@ -158,13 +171,14 @@ export class RoutesController {
   @ApiResponse({ status: 201, description: 'Parada agregada.' })
   async addRouteStop(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Body() dto: AddStopDto,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.routesService.addRouteStop(
       user.sub,
-      id,
+      safeId,
       dto,
       this.getAuthContext(req),
     );
@@ -185,12 +199,13 @@ export class RoutesController {
   @ApiResponse({ status: 400, description: 'No se puede cancelar.' })
   async cancelRoute(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.routesService.cancelRoute(
       user.sub,
-      id,
+      safeId,
       this.getAuthContext(req),
     );
   }
@@ -207,12 +222,13 @@ export class RoutesController {
   @ApiResponse({ status: 200, description: 'Ruta finalizada.' })
   async finalizeRoute(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.routesService.finalizeRoute(
       user.sub,
-      id,
+      safeId,
       this.getAuthContext(req),
     );
   }

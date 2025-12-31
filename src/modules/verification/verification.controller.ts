@@ -9,6 +9,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -55,6 +56,7 @@ export class VerificationController {
   @Roles(RolUsuarioEnum.USER)
   @Post('send')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 600000 } })
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Enviar código de verificación por correo' })
   @ApiResponse({
@@ -93,6 +95,7 @@ export class VerificationController {
   @Roles(RolUsuarioEnum.USER)
   @Post('confirm')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Confirmar código de verificación' })
   @ApiResponse({

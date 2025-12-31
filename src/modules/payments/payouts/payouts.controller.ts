@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -6,12 +7,12 @@ import {
   Param,
   Body,
   Query,
-  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -19,18 +20,30 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { RolUsuarioEnum } from 'src/modules/auth/Enum';
 import { Roles, User } from 'src/modules/common/Decorators';
 import { PayoutsService } from './payouts.service';
 import { GeneratePayoutsDto } from './Dto';
 import type { JwtPayload, AuthContext } from 'src/modules/common/types';
+import { ErrorMessages } from 'src/modules/common/constants/error-messages.constant';
+import { isValidIdentifier } from 'src/modules/common/utils/public-id.util';
 
 @ApiTags('Payouts')
 @ApiBearerAuth('access-token')
 @Controller('payouts')
 export class PayoutsController {
   constructor(private readonly payoutsService: PayoutsService) {}
+
+  private validateIdentifier(value: string, field = 'id'): string {
+    if (!isValidIdentifier(value)) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT(field),
+      );
+    }
+    return value;
+  }
 
   private getAuthContext(req: Request): AuthContext {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -43,6 +56,17 @@ export class PayoutsController {
       ip,
       userAgent: req.headers['user-agent'] || 'unknown',
     };
+  }
+
+  private getIdempotencyKey(req: Request): string | null {
+    const raw = req.headers['idempotency-key'];
+    if (Array.isArray(raw)) {
+      return raw[0] ?? null;
+    }
+    if (typeof raw === 'string') {
+      return raw;
+    }
+    return null;
   }
 
   /* ========== CONDUCTOR ========== */
@@ -77,9 +101,10 @@ export class PayoutsController {
   @ApiResponse({ status: 404, description: 'Payout no encontrado.' })
   async getPayoutById(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ) {
-    return this.payoutsService.getPayoutById(user.sub, id);
+    const safeId = this.validateIdentifier(id);
+    return this.payoutsService.getPayoutById(user.sub, safeId);
   }
 
   /* ========== ADMIN ========== */
@@ -93,7 +118,13 @@ export class PayoutsController {
   @Roles(RolUsuarioEnum.ADMIN)
   @Post('generate')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
   @ApiOperation({ summary: 'Generar payouts para un periodo' })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Clave idempotente para generar payouts',
+  })
   @ApiResponse({ status: 201, description: 'Payouts generados.' })
   async generatePayouts(
     @User() user: JwtPayload,
@@ -104,6 +135,7 @@ export class PayoutsController {
       dto.period,
       user.sub,
       this.getAuthContext(req),
+      this.getIdempotencyKey(req),
     );
   }
 
@@ -115,19 +147,27 @@ export class PayoutsController {
   @Roles(RolUsuarioEnum.ADMIN)
   @Post(':id/paypal')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
   @ApiOperation({ summary: 'Ejecutar payout por PayPal' })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Clave idempotente para ejecutar payout',
+  })
   @ApiParam({ name: 'id', description: 'ID del payout' })
   @ApiResponse({ status: 200, description: 'Payout ejecutado.' })
   @ApiResponse({ status: 400, description: 'Error al ejecutar payout.' })
   async executePaypalPayout(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.payoutsService.executePaypalPayout(
-      id,
+      safeId,
       user.sub,
       this.getAuthContext(req),
+      this.getIdempotencyKey(req),
     );
   }
 
@@ -137,19 +177,27 @@ export class PayoutsController {
   @Roles(RolUsuarioEnum.ADMIN)
   @Patch(':id/fail')
   @ApiOperation({ summary: 'Marcar payout como fallido' })
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Clave idempotente para marcar payout fallido',
+  })
   @ApiParam({ name: 'id', description: 'ID del payout' })
   @ApiResponse({ status: 200, description: 'Payout marcado como fallido.' })
   async failPayout(
     @User() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
     @Body('reason') reason?: string,
   ) {
+    const safeId = this.validateIdentifier(id);
     return this.payoutsService.failPayout(
-      id,
+      safeId,
       reason,
       user.sub,
       this.getAuthContext(req),
+      this.getIdempotencyKey(req),
     );
   }
 

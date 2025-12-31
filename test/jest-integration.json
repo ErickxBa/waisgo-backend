@@ -1,0 +1,19 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": ".*\\.int-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "testEnvironment": "node",
+  "globals": {
+    "ts-jest": {
+      "tsconfig": "<rootDir>/test/tsconfig.jest.json"
+    }
+  },
+  "setupFilesAfterEnv": ["<rootDir>/test/setup-integration.ts"],
+  "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/src/$1"
+  },
+  "passWithNoTests": true
+}

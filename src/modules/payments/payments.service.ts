@@ -21,6 +21,8 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
+import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
+import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
 type PaypalOrderResponse = {
   id?: string;
@@ -49,6 +51,7 @@ export class PaymentsService {
     private readonly driverRepository: Repository<Driver>,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
   private getPayPalCredentials() {
@@ -131,9 +134,22 @@ export class PaymentsService {
     passengerId: string,
     dto: CreatePaymentDto,
     context?: AuthContext,
+    idempotencyKey?: string | null,
   ): Promise<{ message: string; paymentId?: string }> {
+    const normalizedKey = this.idempotencyService.normalizeKey(
+      idempotencyKey || undefined,
+    );
+    if (normalizedKey) {
+      const cached = await this.idempotencyService.get<
+        { message: string; paymentId?: string }
+      >('payments:create', passengerId, normalizedKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const booking = await this.bookingRepository.findOne({
-      where: { id: dto.bookingId },
+      where: buildIdWhere<Booking>(dto.bookingId),
       relations: ['route'],
     });
 
@@ -164,6 +180,7 @@ export class PaymentsService {
     const amount = this.getBookingAmount(booking);
 
     const payment = this.paymentRepository.create({
+      publicId: await generatePublicId(this.paymentRepository, 'PAY'),
       bookingId: booking.id,
       amount,
       currency: 'USD',
@@ -187,10 +204,21 @@ export class PaymentsService {
       },
     });
 
-    return {
+    const response = {
       message: ErrorMessages.PAYMENTS.PAYMENT_INITIATED,
-      paymentId: savedPayment.id,
+      paymentId: savedPayment.publicId,
     };
+
+    if (normalizedKey) {
+      await this.idempotencyService.store(
+        'payments:create',
+        passengerId,
+        normalizedKey,
+        response,
+      );
+    }
+
+    return response;
   }
 
   async getMyPayments(
@@ -224,7 +252,7 @@ export class PaymentsService {
     paymentId: string,
   ): Promise<{ message: string; data?: Payment }> {
     const payment = await this.paymentRepository.findOne({
-      where: { id: paymentId },
+      where: buildIdWhere<Payment>(paymentId),
       relations: ['booking', 'booking.route'],
     });
 
@@ -242,13 +270,26 @@ export class PaymentsService {
     passengerId: string,
     paymentId: string,
     context?: AuthContext,
+    idempotencyKey?: string | null,
   ): Promise<{
     message: string;
     approvalUrl?: string;
     paypalOrderId?: string;
   }> {
+    const normalizedKey = this.idempotencyService.normalizeKey(idempotencyKey || undefined);
+    if (normalizedKey) {
+      const cached = await this.idempotencyService.get<{
+        message: string;
+        approvalUrl?: string;
+        paypalOrderId?: string;
+      }>(`payments:paypal-order:${paymentId}`, passengerId, normalizedKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const payment = await this.paymentRepository.findOne({
-      where: { id: paymentId },
+      where: buildIdWhere<Payment>(paymentId),
       relations: ['booking'],
     });
 
@@ -261,10 +302,6 @@ export class PaymentsService {
       payment.method !== MetodoPagoEnum.TARJETA
     ) {
       throw new BadRequestException(ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD);
-    }
-
-    if (payment.status !== EstadoPagoEnum.PENDING) {
-      throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_NOT_PENDING);
     }
 
     if (payment.status !== EstadoPagoEnum.PENDING) {
@@ -312,11 +349,22 @@ export class PaymentsService {
       metadata: { paymentId: payment.id, paypalOrderId: order.id },
     });
 
-    return {
+    const response = {
       message: ErrorMessages.PAYMENTS.PAYPAL_ORDER_CREATED,
       approvalUrl,
       paypalOrderId: order.id,
     };
+
+    if (normalizedKey) {
+      await this.idempotencyService.store(
+        `payments:paypal-order:${paymentId}`,
+        passengerId,
+        normalizedKey,
+        response,
+      );
+    }
+
+    return response;
   }
 
   async capturePaypalOrder(
@@ -324,9 +372,24 @@ export class PaymentsService {
     paymentId: string,
     paypalOrderId: string,
     context?: AuthContext,
+    idempotencyKey?: string | null,
   ): Promise<{ message: string }> {
+    const normalizedKey = this.idempotencyService.normalizeKey(
+      idempotencyKey || undefined,
+    );
+    if (normalizedKey) {
+      const cached = await this.idempotencyService.get<{ message: string }>(
+        `payments:paypal-capture:${paymentId}`,
+        passengerId,
+        normalizedKey,
+      );
+      if (cached) {
+        return cached;
+      }
+    }
+
     const payment = await this.paymentRepository.findOne({
-      where: { id: paymentId },
+      where: buildIdWhere<Payment>(paymentId),
       relations: ['booking'],
     });
 
@@ -371,9 +434,20 @@ export class PaymentsService {
       metadata: { paymentId: payment.id, paypalOrderId, paypalCaptureId: captureId },
     });
 
-    return {
+    const response = {
       message: ErrorMessages.PAYMENTS.PAYPAL_CAPTURED,
     };
+
+    if (normalizedKey) {
+      await this.idempotencyService.store(
+        `payments:paypal-capture:${paymentId}`,
+        passengerId,
+        normalizedKey,
+        response,
+      );
+    }
+
+    return response;
   }
 
   async getDriverPayments(
@@ -450,9 +524,25 @@ export class PaymentsService {
     paymentId: string,
     actorUserId?: string,
     context?: AuthContext,
+    idempotencyKey?: string | null,
   ): Promise<{ message: string }> {
+    const normalizedKey = this.idempotencyService.normalizeKey(
+      idempotencyKey || undefined,
+    );
+    const actorKey = actorUserId ?? 'system';
+    if (normalizedKey) {
+      const cached = await this.idempotencyService.get<{ message: string }>(
+        `payments:reverse:${paymentId}`,
+        actorKey,
+        normalizedKey,
+      );
+      if (cached) {
+        return cached;
+      }
+    }
+
     const payment = await this.paymentRepository.findOne({
-      where: { id: paymentId },
+      where: buildIdWhere<Payment>(paymentId),
     });
 
     if (!payment) {
@@ -492,8 +582,19 @@ export class PaymentsService {
       metadata: { paymentId: payment.id, method: payment.method },
     });
 
-    return {
+    const response = {
       message: ErrorMessages.PAYMENTS.PAYMENT_REVERSED,
     };
+
+    if (normalizedKey) {
+      await this.idempotencyService.store(
+        `payments:reverse:${paymentId}`,
+        actorKey,
+        normalizedKey,
+        response,
+      );
+    }
+
+    return response;
   }
 }

@@ -3,9 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, MoreThan } from 'typeorm';
+import { Repository, In, MoreThan, LessThanOrEqual } from 'typeorm';
+import { Cron } from '@nestjs/schedule';
 
 import { Route } from './Models/route.entity';
 import { RouteStop } from './Models/route-stop.entity';
@@ -24,9 +26,12 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
+import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
 
 @Injectable()
 export class RoutesService {
+  private readonly logger = new Logger(RoutesService.name);
+
   constructor(
     @InjectRepository(Route)
     private readonly routeRepository: Repository<Route>,
@@ -69,6 +74,21 @@ export class RoutesService {
     return R * c;
   }
 
+  private getDepartureDate(route: Route): Date | null {
+    if (!route.fecha || !route.horaSalida) {
+      return null;
+    }
+    const time =
+      route.horaSalida.length === 5
+        ? `${route.horaSalida}:00`
+        : route.horaSalida;
+    const departure = new Date(`${route.fecha}T${time}`);
+    if (Number.isNaN(departure.getTime())) {
+      return null;
+    }
+    return departure;
+  }
+
   private async ensureRouteAccess(
     route: Route,
     userId: string,
@@ -104,6 +124,67 @@ export class RoutesService {
     }
 
     return driver;
+  }
+
+  @Cron('*/5 * * * *')
+  async autoFinalizeExpiredRoutes(): Promise<void> {
+    try {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(
+        now.getMonth() + 1,
+      ).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      const routes = await this.routeRepository.find({
+        where: {
+          estado: EstadoRutaEnum.ACTIVA,
+          fecha: LessThanOrEqual(today),
+        },
+      });
+
+      if (routes.length === 0) {
+        return;
+      }
+
+      let finalized = 0;
+
+      for (const route of routes) {
+        const departure = this.getDepartureDate(route);
+        if (!departure || departure.getTime() > now.getTime()) {
+          continue;
+        }
+
+        const pendingCount = await this.bookingRepository.count({
+          where: {
+            routeId: route.id,
+            estado: EstadoReservaEnum.CONFIRMADA,
+          },
+        });
+
+        if (pendingCount > 0) {
+          continue;
+        }
+
+        route.estado = EstadoRutaEnum.FINALIZADA;
+        await this.routeRepository.save(route);
+        finalized += 1;
+
+        await this.auditService.logEvent({
+          action: AuditAction.ROUTE_COMPLETED,
+          result: AuditResult.SUCCESS,
+          metadata: { routeId: route.id, reason: 'auto_finalize' },
+        });
+      }
+
+      if (finalized > 0) {
+        this.logger.log(`Auto-finalized routes: ${finalized}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Auto-finalize routes failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
   }
 
   async createRoute(
@@ -142,7 +223,20 @@ export class RoutesService {
       throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_PRICE_REQUIRED);
     }
 
+    const stops = await Promise.all(
+      dto.stops.map(async (stop, index) =>
+        this.routeStopRepository.create({
+          publicId: await generatePublicId(this.routeStopRepository, 'STP'),
+          lat: stop.lat,
+          lng: stop.lng,
+          direccion: stop.direccion.trim(),
+          orden: index + 1,
+        }),
+      ),
+    );
+
     const route = this.routeRepository.create({
+      publicId: await generatePublicId(this.routeRepository, 'RTE'),
       driverId: driver.id,
       origen: dto.origen,
       fecha: dto.fecha,
@@ -153,14 +247,7 @@ export class RoutesService {
       precioPasajero: dto.precioPasajero,
       estado: EstadoRutaEnum.ACTIVA,
       mensaje: dto.mensaje?.trim() || null,
-      stops: dto.stops.map((stop, index) =>
-        this.routeStopRepository.create({
-          lat: stop.lat,
-          lng: stop.lng,
-          direccion: stop.direccion.trim(),
-          orden: index + 1,
-        }),
-      ),
+      stops,
     });
 
     const savedRoute = await this.routeRepository.save(route);
@@ -176,7 +263,7 @@ export class RoutesService {
 
     return {
       message: ErrorMessages.ROUTES.ROUTE_CREATED,
-      routeId: savedRoute.id,
+      routeId: savedRoute.publicId,
     };
   }
 
@@ -266,7 +353,7 @@ export class RoutesService {
     routeId: string,
   ): Promise<{ message: string; data?: Route }> {
     const route = await this.routeRepository.findOne({
-      where: { id: routeId },
+      where: buildIdWhere<Route>(routeId),
       relations: ['stops', 'driver', 'driver.user', 'driver.user.profile'],
     });
 
@@ -287,7 +374,7 @@ export class RoutesService {
     routeId: string,
   ): Promise<{ message: string; stops?: RouteStop[] }> {
     const route = await this.routeRepository.findOne({
-      where: { id: routeId },
+      where: buildIdWhere<Route>(routeId),
       relations: ['driver'],
     });
 
@@ -298,7 +385,7 @@ export class RoutesService {
     await this.ensureRouteAccess(route, userId);
 
     const stops = await this.routeStopRepository.find({
-      where: { routeId },
+      where: { routeId: route.id },
       order: { orden: 'ASC' },
     });
 
@@ -316,8 +403,13 @@ export class RoutesService {
   ): Promise<{ message: string }> {
     const driver = await this.getApprovedDriver(userId);
 
+    const routeWhere = buildIdWhere<Route>(routeId).map((where) => ({
+      ...where,
+      driverId: driver.id,
+    }));
+
     const route = await this.routeRepository.findOne({
-      where: { id: routeId, driverId: driver.id },
+      where: routeWhere,
       relations: ['stops'],
     });
 
@@ -378,7 +470,8 @@ export class RoutesService {
     }
 
     const newStop = this.routeStopRepository.create({
-      routeId,
+      routeId: route.id,
+      publicId: await generatePublicId(this.routeStopRepository, 'STP'),
       lat: dto.lat,
       lng: dto.lng,
       direccion: dto.direccion.trim(),
@@ -393,7 +486,7 @@ export class RoutesService {
       result: AuditResult.SUCCESS,
       ipAddress: context?.ip,
       userAgent: context?.userAgent,
-      metadata: { routeId, stopId: newStop.id },
+      metadata: { routeId: route.id, stopId: newStop.id },
     });
 
     return {
@@ -409,7 +502,10 @@ export class RoutesService {
     const driver = await this.getApprovedDriver(userId);
 
     const route = await this.routeRepository.findOne({
-      where: { id: routeId, driverId: driver.id },
+      where: buildIdWhere<Route>(routeId).map((where) => ({
+        ...where,
+        driverId: driver.id,
+      })),
     });
 
     if (!route) {
@@ -425,14 +521,14 @@ export class RoutesService {
     await this.routeRepository.save(route);
 
     await this.bookingRepository.update(
-      { routeId, estado: In([EstadoReservaEnum.CONFIRMADA]) },
+      { routeId: route.id, estado: In([EstadoReservaEnum.CONFIRMADA]) },
       { estado: EstadoReservaEnum.CANCELADA, cancelledAt: new Date() },
     );
 
     const payments = await this.paymentRepository
       .createQueryBuilder('payment')
       .leftJoin('payment.booking', 'booking')
-      .where('booking.routeId = :routeId', { routeId })
+      .where('booking.routeId = :routeId', { routeId: route.id })
       .andWhere('payment.status IN (:...statuses)', {
         statuses: [EstadoPagoEnum.PAID, EstadoPagoEnum.PENDING],
       })
@@ -461,7 +557,7 @@ export class RoutesService {
       result: AuditResult.SUCCESS,
       ipAddress: context?.ip,
       userAgent: context?.userAgent,
-      metadata: { routeId },
+      metadata: { routeId: route.id },
     });
 
     return {
@@ -477,7 +573,10 @@ export class RoutesService {
     const driver = await this.getApprovedDriver(userId);
 
     const route = await this.routeRepository.findOne({
-      where: { id: routeId, driverId: driver.id },
+      where: buildIdWhere<Route>(routeId).map((where) => ({
+        ...where,
+        driverId: driver.id,
+      })),
     });
 
     if (!route) {
@@ -490,8 +589,8 @@ export class RoutesService {
 
     const pendingBookings = await this.bookingRepository.find({
       where: {
-        routeId,
-        estado: In([EstadoReservaEnum.CONFIRMADA, EstadoReservaEnum.CANCELADA]),
+        routeId: route.id,
+        estado: EstadoReservaEnum.CONFIRMADA,
       },
     });
 
@@ -508,7 +607,7 @@ export class RoutesService {
       result: AuditResult.SUCCESS,
       ipAddress: context?.ip,
       userAgent: context?.userAgent,
-      metadata: { routeId },
+      metadata: { routeId: route.id },
     });
 
     return {

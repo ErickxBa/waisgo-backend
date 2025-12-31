@@ -23,6 +23,9 @@ export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 12, unique: true })
+  publicId: string;
+
   @Column({ type: 'uuid', unique: true })
   bookingId: string;
 

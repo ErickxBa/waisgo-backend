@@ -22,6 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
+import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
 
 @Injectable()
 export class BookingsService {
@@ -89,6 +90,40 @@ export class BookingsService {
     return departure;
   }
 
+  private async finalizeRouteIfReady(
+    routeId: string,
+    driverUserId?: string,
+    context?: AuthContext,
+  ): Promise<void> {
+    const pendingCount = await this.bookingRepository.count({
+      where: { routeId, estado: EstadoReservaEnum.CONFIRMADA },
+    });
+
+    if (pendingCount > 0) {
+      return;
+    }
+
+    const route = await this.routeRepository.findOne({
+      where: { id: routeId },
+    });
+
+    if (!route || route.estado !== EstadoRutaEnum.ACTIVA) {
+      return;
+    }
+
+    route.estado = EstadoRutaEnum.FINALIZADA;
+    await this.routeRepository.save(route);
+
+    await this.auditService.logEvent({
+      action: AuditAction.ROUTE_COMPLETED,
+      userId: driverUserId,
+      result: AuditResult.SUCCESS,
+      ipAddress: context?.ip,
+      userAgent: context?.userAgent,
+      metadata: { routeId },
+    });
+  }
+
   /**
    * Crear una reserva
    */
@@ -142,6 +177,8 @@ export class BookingsService {
     }
 
     let bookingId: string | undefined;
+    let bookingPublicId: string | undefined;
+    let routeInternalId: string | undefined;
     let otp: string | undefined;
 
     await this.bookingRepository.manager.transaction(async (manager) => {
@@ -150,7 +187,7 @@ export class BookingsService {
       const stopRepo = manager.getRepository(RouteStop);
 
       const route = await routeRepo.findOne({
-        where: { id: dto.routeId },
+        where: buildIdWhere<Route>(dto.routeId),
         lock: { mode: 'pessimistic_write' },
       });
 
@@ -170,6 +207,8 @@ export class BookingsService {
         throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_PRICE_REQUIRED);
       }
 
+      routeInternalId = route.id;
+
       const existing = await bookingRepo.findOne({
         where: { routeId: route.id, passengerId },
       });
@@ -181,6 +220,7 @@ export class BookingsService {
       const generatedOtp = this.generateOtp();
 
       const booking = bookingRepo.create({
+        publicId: await generatePublicId(bookingRepo, 'BKG'),
         routeId: route.id,
         passengerId,
         estado: EstadoReservaEnum.CONFIRMADA,
@@ -191,6 +231,7 @@ export class BookingsService {
 
       const savedBooking = await bookingRepo.save(booking);
       bookingId = savedBooking.id;
+      bookingPublicId = savedBooking.publicId;
       otp = generatedOtp;
 
       route.asientosDisponibles = Math.max(route.asientosDisponibles - 1, 0);
@@ -251,6 +292,7 @@ export class BookingsService {
 
         const newStop = stopRepo.create({
           routeId: route.id,
+          publicId: await generatePublicId(stopRepo, 'STP'),
           lat: dto.pickupLat as number,
           lng: dto.pickupLng as number,
           direccion: pickupDireccion,
@@ -261,7 +303,7 @@ export class BookingsService {
       }
     });
 
-    if (!bookingId || !otp) {
+    if (!bookingId || !bookingPublicId || !otp) {
       throw new BadRequestException(ErrorMessages.SYSTEM.INTERNAL_ERROR);
     }
 
@@ -271,7 +313,11 @@ export class BookingsService {
       result: AuditResult.SUCCESS,
       ipAddress: context?.ip,
       userAgent: context?.userAgent,
-      metadata: { bookingId, routeId: dto.routeId, metodoPago: dto.metodoPago },
+      metadata: {
+        bookingId,
+        routeId: routeInternalId ?? dto.routeId,
+        metodoPago: dto.metodoPago,
+      },
     });
 
     await this.auditService.logEvent({
@@ -287,7 +333,7 @@ export class BookingsService {
 
     return {
       message: ErrorMessages.BOOKINGS.BOOKING_CREATED,
-      bookingId,
+      bookingId: bookingPublicId,
       otp,
     };
   }
@@ -333,7 +379,7 @@ export class BookingsService {
     bookingId: string,
   ): Promise<{ message: string; data?: Booking }> {
     const booking = await this.bookingRepository.findOne({
-      where: { id: bookingId },
+      where: buildIdWhere<Booking>(bookingId),
       relations: [
         'route',
         'route.stops',
@@ -362,7 +408,7 @@ export class BookingsService {
     context?: AuthContext,
   ): Promise<{ message: string }> {
     const booking = await this.bookingRepository.findOne({
-      where: { id: bookingId },
+      where: buildIdWhere<Booking>(bookingId),
       relations: ['route'],
     });
 
@@ -455,7 +501,7 @@ export class BookingsService {
     bookingId: string,
   ): Promise<{ message: string; stops?: RouteStop[] }> {
     const booking = await this.bookingRepository.findOne({
-      where: { id: bookingId },
+      where: buildIdWhere<Booking>(bookingId),
     });
 
     if (!booking || booking.passengerId !== passengerId) {
@@ -493,7 +539,10 @@ export class BookingsService {
     }
 
     const route = await this.routeRepository.findOne({
-      where: { id: routeId, driverId: driver.id },
+      where: buildIdWhere<Route>(routeId).map((where) => ({
+        ...where,
+        driverId: driver.id,
+      })),
     });
 
     if (!route) {
@@ -529,7 +578,7 @@ export class BookingsService {
     }
 
     const booking = await this.bookingRepository.findOne({
-      where: { id: bookingId },
+      where: buildIdWhere<Booking>(bookingId),
       relations: ['route'],
     });
 
@@ -551,6 +600,8 @@ export class BookingsService {
 
     booking.estado = EstadoReservaEnum.COMPLETADA;
     await this.bookingRepository.save(booking);
+
+    await this.finalizeRouteIfReady(booking.routeId, driverUserId, context);
 
     this.logger.log(`Booking completed: ${bookingId}`);
 
@@ -576,7 +627,7 @@ export class BookingsService {
     }
 
     const booking = await this.bookingRepository.findOne({
-      where: { id: bookingId },
+      where: buildIdWhere<Booking>(bookingId),
       relations: ['route'],
     });
 
@@ -604,6 +655,8 @@ export class BookingsService {
 
     booking.estado = EstadoReservaEnum.NO_SHOW;
     await this.bookingRepository.save(booking);
+
+    await this.finalizeRouteIfReady(booking.routeId, driverUserId, context);
 
     const payment = await this.paymentRepository.findOne({
       where: { bookingId: booking.id },
@@ -649,7 +702,7 @@ export class BookingsService {
     }
 
     const booking = await this.bookingRepository.findOne({
-      where: { id: bookingId },
+      where: buildIdWhere<Booking>(bookingId),
       relations: ['route'],
     });
 

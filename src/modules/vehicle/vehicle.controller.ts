@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -23,6 +24,8 @@ import type { JwtPayload, AuthContext } from '../common/types';
 import { RolUsuarioEnum } from '../auth/Enum';
 import { VehicleService } from './vehicle.service';
 import { CreateVehicleDto, UpdateVehicleDto } from './Dto';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { isValidIdentifier } from '../common/utils/public-id.util';
 
 @ApiTags('Vehicles')
 @ApiBearerAuth('access-token')
@@ -37,7 +40,12 @@ export class VehiclesController {
   }
 
   private async validateVehicleId(vehicleId: string): Promise<string> {
-    return this.uuidPipe.transform(vehicleId, { type: 'param', data: 'id' });
+    if (!isValidIdentifier(vehicleId)) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT('id'),
+      );
+    }
+    return vehicleId;
   }
 
   private getAuthContext(req: Request): AuthContext {

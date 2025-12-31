@@ -112,7 +112,7 @@ export class AuthService {
 
       await queryRunner.manager.save(authUser);
 
-      await this.businessService.createFromAuthWithManager(
+      const businessIdentity = await this.businessService.createFromAuthWithManager(
         queryRunner.manager,
         userId,
         {
@@ -139,7 +139,8 @@ export class AuthService {
 
       return {
         success: true,
-        userId,
+        userId: businessIdentity.publicId,
+        alias: businessIdentity.alias,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();

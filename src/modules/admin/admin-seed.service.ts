@@ -33,6 +33,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
+import { generatePublicId } from '../common/utils/public-id.util';
 
 type SeedResult = {
   message: string;
@@ -116,20 +117,23 @@ export class AdminSeedService {
       const documentRepo = manager.getRepository(DriverDocument);
       const vehicleRepo = manager.getRepository(Vehicle);
       const routeRepo = manager.getRepository(Route);
+      const routeStopRepo = manager.getRepository(RouteStop);
       const bookingRepo = manager.getRepository(Booking);
       const paymentRepo = manager.getRepository(Payment);
       const payoutRepo = manager.getRepository(Payout);
       const ratingRepo = manager.getRepository(Rating);
       const authRepo = manager.getRepository(AuthUser);
 
-      const createStops = (lat: number, lng: number, label: string) => [
-        manager.create(RouteStop, {
+      const createStops = async (lat: number, lng: number, label: string) => [
+        routeStopRepo.create({
+          publicId: await generatePublicId(routeStopRepo, 'STP'),
           lat,
           lng,
           direccion: `${label} Stop 1`,
           orden: 1,
         }),
-        manager.create(RouteStop, {
+        routeStopRepo.create({
+          publicId: await generatePublicId(routeStopRepo, 'STP'),
           lat: lat + 0.002,
           lng: lng + 0.002,
           direccion: `${label} Stop 2`,
@@ -222,6 +226,7 @@ export class AdminSeedService {
       await businessRepo.save([
         businessRepo.create({
           id: driverOneId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: driverOneEmail,
           alias: seedAlias,
           profile: profileRepo.create({
@@ -236,6 +241,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: driverTwoId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: driverTwoEmail,
           alias: 'seed_driver_2',
           profile: profileRepo.create({
@@ -250,6 +256,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: driverThreeId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: driverThreeEmail,
           alias: 'seed_driver_3',
           profile: profileRepo.create({
@@ -264,6 +271,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: passengerOneId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: passengerOneEmail,
           alias: 'seed_passenger_1',
           profile: profileRepo.create({
@@ -278,6 +286,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: passengerTwoId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: passengerTwoEmail,
           alias: 'seed_passenger_2',
           profile: profileRepo.create({
@@ -292,6 +301,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: passengerThreeId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: passengerThreeEmail,
           alias: 'seed_passenger_3',
           profile: profileRepo.create({
@@ -306,6 +316,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: passengerFourId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: passengerFourEmail,
           alias: 'seed_passenger_4',
           profile: profileRepo.create({
@@ -320,6 +331,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: passengerFiveId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: passengerFiveEmail,
           alias: 'seed_passenger_5',
           profile: profileRepo.create({
@@ -334,6 +346,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: passengerSixId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: passengerSixEmail,
           alias: 'seed_passenger_6',
           profile: profileRepo.create({
@@ -348,6 +361,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: adminId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: adminEmail,
           alias: 'seed_admin',
           profile: profileRepo.create({
@@ -359,6 +373,7 @@ export class AdminSeedService {
         }),
         businessRepo.create({
           id: userId,
+          publicId: await generatePublicId(businessRepo, 'USR'),
           email: userEmail,
           alias: 'seed_user',
           profile: profileRepo.create({
@@ -372,6 +387,7 @@ export class AdminSeedService {
 
       const driverOne = await driverRepo.save(
         driverRepo.create({
+          publicId: await generatePublicId(driverRepo, 'DRV'),
           userId: driverOneId,
           paypalEmail: 'seed.driver1@paypal.com',
           estado: EstadoConductorEnum.APROBADO,
@@ -380,6 +396,7 @@ export class AdminSeedService {
       );
       const driverTwo = await driverRepo.save(
         driverRepo.create({
+          publicId: await generatePublicId(driverRepo, 'DRV'),
           userId: driverTwoId,
           paypalEmail: 'seed.driver2@paypal.com',
           estado: EstadoConductorEnum.APROBADO,
@@ -388,6 +405,7 @@ export class AdminSeedService {
       );
       const driverThree = await driverRepo.save(
         driverRepo.create({
+          publicId: await generatePublicId(driverRepo, 'DRV'),
           userId: driverThreeId,
           paypalEmail: 'seed.driver3@paypal.com',
           estado: EstadoConductorEnum.APROBADO,
@@ -397,36 +415,42 @@ export class AdminSeedService {
 
       await documentRepo.save([
         documentRepo.create({
+          publicId: await generatePublicId(documentRepo, 'DOC'),
           driverId: driverOne.id,
           tipo: TipoDocumentoEnum.LICENCIA,
           archivoUrl: 'seed/driver1/licencia.pdf',
           estado: EstadoDocumentoEnum.APROBADO,
         }),
         documentRepo.create({
+          publicId: await generatePublicId(documentRepo, 'DOC'),
           driverId: driverOne.id,
           tipo: TipoDocumentoEnum.MATRICULA,
           archivoUrl: 'seed/driver1/matricula.pdf',
           estado: EstadoDocumentoEnum.APROBADO,
         }),
         documentRepo.create({
+          publicId: await generatePublicId(documentRepo, 'DOC'),
           driverId: driverTwo.id,
           tipo: TipoDocumentoEnum.LICENCIA,
           archivoUrl: 'seed/driver2/licencia.pdf',
           estado: EstadoDocumentoEnum.APROBADO,
         }),
         documentRepo.create({
+          publicId: await generatePublicId(documentRepo, 'DOC'),
           driverId: driverTwo.id,
           tipo: TipoDocumentoEnum.MATRICULA,
           archivoUrl: 'seed/driver2/matricula.pdf',
           estado: EstadoDocumentoEnum.APROBADO,
         }),
         documentRepo.create({
+          publicId: await generatePublicId(documentRepo, 'DOC'),
           driverId: driverThree.id,
           tipo: TipoDocumentoEnum.LICENCIA,
           archivoUrl: 'seed/driver3/licencia.pdf',
           estado: EstadoDocumentoEnum.APROBADO,
         }),
         documentRepo.create({
+          publicId: await generatePublicId(documentRepo, 'DOC'),
           driverId: driverThree.id,
           tipo: TipoDocumentoEnum.MATRICULA,
           archivoUrl: 'seed/driver3/matricula.pdf',
@@ -436,6 +460,7 @@ export class AdminSeedService {
 
       await vehicleRepo.save([
         vehicleRepo.create({
+          publicId: await generatePublicId(vehicleRepo, 'VEH'),
           driverId: driverOne.id,
           marca: 'Toyota',
           modelo: 'Corolla',
@@ -445,6 +470,7 @@ export class AdminSeedService {
           isActivo: true,
         }),
         vehicleRepo.create({
+          publicId: await generatePublicId(vehicleRepo, 'VEH'),
           driverId: driverTwo.id,
           marca: 'Chevrolet',
           modelo: 'Spark',
@@ -454,6 +480,7 @@ export class AdminSeedService {
           isActivo: true,
         }),
         vehicleRepo.create({
+          publicId: await generatePublicId(vehicleRepo, 'VEH'),
           driverId: driverThree.id,
           marca: 'Kia',
           modelo: 'Rio',
@@ -466,6 +493,7 @@ export class AdminSeedService {
 
       const routeOne = await routeRepo.save(
         routeRepo.create({
+          publicId: await generatePublicId(routeRepo, 'RTE'),
           driverId: driverOne.id,
           origen: CampusOrigenEnum.CAMPUS_PRINCIPAL,
           fecha: today,
@@ -476,12 +504,13 @@ export class AdminSeedService {
           precioPasajero: 1.5,
           estado: EstadoRutaEnum.FINALIZADA,
           mensaje: 'Seed route 1',
-          stops: createStops(-0.2101, -78.4896, 'R1'),
+          stops: await createStops(-0.2101, -78.4896, 'R1'),
         }),
       );
 
       const routeTwo = await routeRepo.save(
         routeRepo.create({
+          publicId: await generatePublicId(routeRepo, 'RTE'),
           driverId: driverOne.id,
           origen: CampusOrigenEnum.EL_BOSQUE,
           fecha: tomorrow,
@@ -492,12 +521,13 @@ export class AdminSeedService {
           precioPasajero: 1.0,
           estado: EstadoRutaEnum.ACTIVA,
           mensaje: 'Seed route 2',
-          stops: createStops(-0.206, -78.5001, 'R2'),
+          stops: await createStops(-0.206, -78.5001, 'R2'),
         }),
       );
 
       const routeThree = await routeRepo.save(
         routeRepo.create({
+          publicId: await generatePublicId(routeRepo, 'RTE'),
           driverId: driverTwo.id,
           origen: CampusOrigenEnum.CAMPUS_PRINCIPAL,
           fecha: yesterday,
@@ -508,12 +538,13 @@ export class AdminSeedService {
           precioPasajero: 2.0,
           estado: EstadoRutaEnum.FINALIZADA,
           mensaje: 'Seed route 3',
-          stops: createStops(-0.215, -78.4705, 'R3'),
+          stops: await createStops(-0.215, -78.4705, 'R3'),
         }),
       );
 
       const routeFour = await routeRepo.save(
         routeRepo.create({
+          publicId: await generatePublicId(routeRepo, 'RTE'),
           driverId: driverTwo.id,
           origen: CampusOrigenEnum.EL_BOSQUE,
           fecha: today,
@@ -524,12 +555,13 @@ export class AdminSeedService {
           precioPasajero: 1.8,
           estado: EstadoRutaEnum.CANCELADA,
           mensaje: 'Seed route 4 cancelled',
-          stops: createStops(-0.2302, -78.5102, 'R4'),
+          stops: await createStops(-0.2302, -78.5102, 'R4'),
         }),
       );
 
       const routeFive = await routeRepo.save(
         routeRepo.create({
+          publicId: await generatePublicId(routeRepo, 'RTE'),
           driverId: driverThree.id,
           origen: CampusOrigenEnum.CAMPUS_PRINCIPAL,
           fecha: tomorrow,
@@ -540,12 +572,13 @@ export class AdminSeedService {
           precioPasajero: 1.2,
           estado: EstadoRutaEnum.ACTIVA,
           mensaje: 'Seed route 5',
-          stops: createStops(-0.2002, -78.4802, 'R5'),
+          stops: await createStops(-0.2002, -78.4802, 'R5'),
         }),
       );
 
       const routeSix = await routeRepo.save(
         routeRepo.create({
+          publicId: await generatePublicId(routeRepo, 'RTE'),
           driverId: driverThree.id,
           origen: CampusOrigenEnum.EL_BOSQUE,
           fecha: yesterday,
@@ -556,12 +589,13 @@ export class AdminSeedService {
           precioPasajero: 1.3,
           estado: EstadoRutaEnum.FINALIZADA,
           mensaje: 'Seed route 6',
-          stops: createStops(-0.2251, -78.495, 'R6'),
+          stops: await createStops(-0.2251, -78.495, 'R6'),
         }),
       );
 
       const bookingOne = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeOne.id,
           passengerId: passengerOneId,
           estado: EstadoReservaEnum.COMPLETADA,
@@ -573,6 +607,7 @@ export class AdminSeedService {
 
       const bookingTwo = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeOne.id,
           passengerId: passengerTwoId,
           estado: EstadoReservaEnum.COMPLETADA,
@@ -584,6 +619,7 @@ export class AdminSeedService {
 
       const bookingThree = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeOne.id,
           passengerId: passengerThreeId,
           estado: EstadoReservaEnum.NO_SHOW,
@@ -595,6 +631,7 @@ export class AdminSeedService {
 
       const bookingFour = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeTwo.id,
           passengerId: passengerFourId,
           estado: EstadoReservaEnum.CONFIRMADA,
@@ -606,6 +643,7 @@ export class AdminSeedService {
 
       const bookingFive = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeThree.id,
           passengerId: passengerFourId,
           estado: EstadoReservaEnum.COMPLETADA,
@@ -617,6 +655,7 @@ export class AdminSeedService {
 
       const bookingSix = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeThree.id,
           passengerId: passengerFiveId,
           estado: EstadoReservaEnum.NO_SHOW,
@@ -628,6 +667,7 @@ export class AdminSeedService {
 
       const bookingSeven = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeFour.id,
           passengerId: passengerSixId,
           estado: EstadoReservaEnum.CANCELADA,
@@ -640,6 +680,7 @@ export class AdminSeedService {
 
       const bookingEight = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeSix.id,
           passengerId: passengerTwoId,
           estado: EstadoReservaEnum.COMPLETADA,
@@ -651,6 +692,7 @@ export class AdminSeedService {
 
       const bookingNine = await bookingRepo.save(
         bookingRepo.create({
+          publicId: await generatePublicId(bookingRepo, 'BKG'),
           routeId: routeSix.id,
           passengerId: passengerSixId,
           estado: EstadoReservaEnum.COMPLETADA,
@@ -662,6 +704,7 @@ export class AdminSeedService {
 
       const paymentOne = await paymentRepo.save(
         paymentRepo.create({
+          publicId: await generatePublicId(paymentRepo, 'PAY'),
           bookingId: bookingOne.id,
           amount: Number(routeOne.precioPasajero),
           currency: 'USD',
@@ -675,6 +718,7 @@ export class AdminSeedService {
 
       const paymentTwo = await paymentRepo.save(
         paymentRepo.create({
+          publicId: await generatePublicId(paymentRepo, 'PAY'),
           bookingId: bookingTwo.id,
           amount: Number(routeOne.precioPasajero),
           currency: 'USD',
@@ -688,6 +732,7 @@ export class AdminSeedService {
 
       const paymentThree = await paymentRepo.save(
         paymentRepo.create({
+          publicId: await generatePublicId(paymentRepo, 'PAY'),
           bookingId: bookingFour.id,
           amount: Number(routeTwo.precioPasajero),
           currency: 'USD',
@@ -699,6 +744,7 @@ export class AdminSeedService {
 
       const paymentFour = await paymentRepo.save(
         paymentRepo.create({
+          publicId: await generatePublicId(paymentRepo, 'PAY'),
           bookingId: bookingFive.id,
           amount: Number(routeThree.precioPasajero),
           currency: 'USD',
@@ -712,6 +758,7 @@ export class AdminSeedService {
 
       const paymentFive = await paymentRepo.save(
         paymentRepo.create({
+          publicId: await generatePublicId(paymentRepo, 'PAY'),
           bookingId: bookingSeven.id,
           amount: Number(routeFour.precioPasajero),
           currency: 'USD',
@@ -725,6 +772,7 @@ export class AdminSeedService {
 
       const paymentSix = await paymentRepo.save(
         paymentRepo.create({
+          publicId: await generatePublicId(paymentRepo, 'PAY'),
           bookingId: bookingNine.id,
           amount: Number(routeSix.precioPasajero),
           currency: 'USD',
@@ -744,6 +792,7 @@ export class AdminSeedService {
 
       const payoutOne = await payoutRepo.save(
         payoutRepo.create({
+          publicId: await generatePublicId(payoutRepo, 'PYO'),
           driverId: driverOne.id,
           period,
           amount: payoutOneAmount,
@@ -755,6 +804,7 @@ export class AdminSeedService {
       );
       const payoutTwo = await payoutRepo.save(
         payoutRepo.create({
+          publicId: await generatePublicId(payoutRepo, 'PYO'),
           driverId: driverTwo.id,
           period,
           amount: payoutTwoAmount,
@@ -763,6 +813,7 @@ export class AdminSeedService {
       );
       const payoutThree = await payoutRepo.save(
         payoutRepo.create({
+          publicId: await generatePublicId(payoutRepo, 'PYO'),
           driverId: driverThree.id,
           period,
           amount: payoutThreeAmount,
@@ -780,6 +831,7 @@ export class AdminSeedService {
 
       await ratingRepo.save([
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: passengerOneId,
           toUserId: driverOneId,
           routeId: routeOne.id,
@@ -787,6 +839,7 @@ export class AdminSeedService {
           comment: 'Great ride',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: driverOneId,
           toUserId: passengerOneId,
           routeId: routeOne.id,
@@ -794,6 +847,7 @@ export class AdminSeedService {
           comment: 'Good passenger',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: passengerTwoId,
           toUserId: driverOneId,
           routeId: routeOne.id,
@@ -801,6 +855,7 @@ export class AdminSeedService {
           comment: 'Nice driver',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: driverOneId,
           toUserId: passengerTwoId,
           routeId: routeOne.id,
@@ -808,6 +863,7 @@ export class AdminSeedService {
           comment: 'On time',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: passengerThreeId,
           toUserId: driverOneId,
           routeId: routeOne.id,
@@ -815,6 +871,7 @@ export class AdminSeedService {
           comment: 'No show',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: passengerFourId,
           toUserId: driverTwoId,
           routeId: routeThree.id,
@@ -822,6 +879,7 @@ export class AdminSeedService {
           comment: 'Smooth ride',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: driverTwoId,
           toUserId: passengerFourId,
           routeId: routeThree.id,
@@ -829,6 +887,7 @@ export class AdminSeedService {
           comment: 'Great rider',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: passengerFiveId,
           toUserId: driverTwoId,
           routeId: routeThree.id,
@@ -836,6 +895,7 @@ export class AdminSeedService {
           comment: 'Good route',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: passengerTwoId,
           toUserId: driverThreeId,
           routeId: routeSix.id,
@@ -843,6 +903,7 @@ export class AdminSeedService {
           comment: 'Excellent',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: driverThreeId,
           toUserId: passengerTwoId,
           routeId: routeSix.id,
@@ -850,6 +911,7 @@ export class AdminSeedService {
           comment: 'Friendly rider',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: passengerSixId,
           toUserId: driverThreeId,
           routeId: routeSix.id,
@@ -857,6 +919,7 @@ export class AdminSeedService {
           comment: 'Very good',
         }),
         ratingRepo.create({
+          publicId: await generatePublicId(ratingRepo, 'RAT'),
           fromUserId: driverThreeId,
           toUserId: passengerSixId,
           routeId: routeSix.id,
@@ -867,35 +930,35 @@ export class AdminSeedService {
 
       return {
         authUsersCount: authUsers.length,
-        drivers: [driverOne.id, driverTwo.id, driverThree.id],
+        drivers: [driverOne.publicId, driverTwo.publicId, driverThree.publicId],
         routes: [
-          routeOne.id,
-          routeTwo.id,
-          routeThree.id,
-          routeFour.id,
-          routeFive.id,
-          routeSix.id,
+          routeOne.publicId,
+          routeTwo.publicId,
+          routeThree.publicId,
+          routeFour.publicId,
+          routeFive.publicId,
+          routeSix.publicId,
         ],
         bookings: [
-          bookingOne.id,
-          bookingTwo.id,
-          bookingThree.id,
-          bookingFour.id,
-          bookingFive.id,
-          bookingSix.id,
-          bookingSeven.id,
-          bookingEight.id,
-          bookingNine.id,
+          bookingOne.publicId,
+          bookingTwo.publicId,
+          bookingThree.publicId,
+          bookingFour.publicId,
+          bookingFive.publicId,
+          bookingSix.publicId,
+          bookingSeven.publicId,
+          bookingEight.publicId,
+          bookingNine.publicId,
         ],
         payments: [
-          paymentOne.id,
-          paymentTwo.id,
-          paymentThree.id,
-          paymentFour.id,
-          paymentFive.id,
-          paymentSix.id,
+          paymentOne.publicId,
+          paymentTwo.publicId,
+          paymentThree.publicId,
+          paymentFour.publicId,
+          paymentFive.publicId,
+          paymentSix.publicId,
         ],
-        payouts: [payoutOne.id, payoutTwo.id, payoutThree.id],
+        payouts: [payoutOne.publicId, payoutTwo.publicId, payoutThree.publicId],
         ratingsCount: 12,
       };
     });

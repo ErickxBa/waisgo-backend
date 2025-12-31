@@ -21,6 +21,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
+import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
 
 @Injectable()
 export class RatingsService {
@@ -95,7 +96,7 @@ export class RatingsService {
     context?: AuthContext,
   ): Promise<{ message: string; ratingId?: string }> {
     const route = await this.routeRepository.findOne({
-      where: { id: dto.routeId },
+      where: buildIdWhere<Route>(dto.routeId),
     });
 
     if (!route) {
@@ -116,9 +117,21 @@ export class RatingsService {
 
     const driverUserId = driver?.userId;
 
+    const toUser = await this.businessUserRepository.findOne({
+      where: [
+        { id: dto.toUserId },
+        { publicId: dto.toUserId },
+        { alias: dto.toUserId },
+      ],
+    });
+
+    if (!toUser) {
+      throw new NotFoundException(ErrorMessages.USER.NOT_FOUND);
+    }
+
     const passengerBooking = await this.bookingRepository.findOne({
       where: {
-        routeId: dto.routeId,
+        routeId: route.id,
         passengerId: fromUserId,
         estado: In([EstadoReservaEnum.COMPLETADA, EstadoReservaEnum.NO_SHOW]),
       },
@@ -131,15 +144,15 @@ export class RatingsService {
       throw new ForbiddenException(ErrorMessages.RATINGS.NOT_PARTICIPANT);
     }
 
-    if (isPassenger && dto.toUserId !== driverUserId) {
+    if (isPassenger && toUser.id !== driverUserId) {
       throw new BadRequestException(ErrorMessages.RATINGS.NOT_PARTICIPANT);
     }
 
     if (isDriver) {
       const targetBooking = await this.bookingRepository.findOne({
         where: {
-          routeId: dto.routeId,
-          passengerId: dto.toUserId,
+          routeId: route.id,
+          passengerId: toUser.id,
           estado: In([EstadoReservaEnum.COMPLETADA, EstadoReservaEnum.NO_SHOW]),
         },
       });
@@ -152,8 +165,8 @@ export class RatingsService {
     const existingRating = await this.ratingRepository.findOne({
       where: {
         fromUserId,
-        toUserId: dto.toUserId,
-        routeId: dto.routeId,
+        toUserId: toUser.id,
+        routeId: route.id,
       },
     });
 
@@ -162,16 +175,17 @@ export class RatingsService {
     }
 
     const rating = this.ratingRepository.create({
+      publicId: await generatePublicId(this.ratingRepository, 'RAT'),
       fromUserId,
-      toUserId: dto.toUserId,
-      routeId: dto.routeId,
+      toUserId: toUser.id,
+      routeId: route.id,
       score: dto.score,
       comment: dto.comment?.trim() || null,
     });
 
     const savedRating = await this.ratingRepository.save(rating);
 
-    await this.updateUserRating(dto.toUserId, context);
+    await this.updateUserRating(toUser.id, context);
 
     await this.auditService.logEvent({
       action: AuditAction.RATING_GIVEN,
@@ -181,8 +195,8 @@ export class RatingsService {
       userAgent: context?.userAgent,
       metadata: {
         ratingId: savedRating.id,
-        routeId: dto.routeId,
-        toUserId: dto.toUserId,
+        routeId: route.id,
+        toUserId: toUser.id,
         score: dto.score,
       },
     });
@@ -193,7 +207,7 @@ export class RatingsService {
 
     return {
       message: ErrorMessages.RATINGS.RATING_SUCCESS,
-      ratingId: savedRating.id,
+      ratingId: savedRating.publicId,
     };
   }
 
@@ -292,7 +306,7 @@ export class RatingsService {
     usersToRate?: { userId: string; name: string }[];
   }> {
     const route = await this.routeRepository.findOne({
-      where: { id: routeId },
+      where: buildIdWhere<Route>(routeId),
     });
 
     if (!route) {
@@ -321,7 +335,7 @@ export class RatingsService {
 
     const passengerBooking = await this.bookingRepository.findOne({
       where: {
-        routeId,
+        routeId: route.id,
         passengerId: userId,
         estado: In([EstadoReservaEnum.COMPLETADA, EstadoReservaEnum.NO_SHOW]),
       },
@@ -335,7 +349,7 @@ export class RatingsService {
     }
 
     const existingRatings = await this.ratingRepository.find({
-      where: { fromUserId: userId, routeId },
+      where: { fromUserId: userId, routeId: route.id },
     });
     const ratedUserIds = new Set(existingRatings.map((r) => r.toUserId));
 
@@ -348,7 +362,7 @@ export class RatingsService {
     if (isDriver) {
       const bookings = await this.bookingRepository.find({
         where: {
-          routeId,
+          routeId: route.id,
           estado: In([EstadoReservaEnum.COMPLETADA, EstadoReservaEnum.NO_SHOW]),
         },
       });
@@ -367,7 +381,7 @@ export class RatingsService {
     });
 
     const usersToRate = users.map((user) => ({
-      userId: user.id,
+      userId: user.alias || user.publicId,
       name: user.profile
         ? `${user.profile.nombre} ${user.profile.apellido}`.trim()
         : user.alias,
@@ -410,6 +424,7 @@ export class RatingsService {
 
     const data = profiles.map((profile) => ({
       userId: profile.userId,
+      publicId: profile.user?.publicId,
       email: profile.user?.email,
       alias: profile.user?.alias,
       rating: Number(profile.ratingPromedio),
