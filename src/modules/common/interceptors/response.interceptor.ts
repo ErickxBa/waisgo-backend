@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { sanitizeResponseData } from '../utils/response-sanitizer.util';
 
 /**
  * Respuesta estandarizada para el frontend
@@ -24,7 +25,7 @@ export interface ApiResponse<T> {
  * {
  *   success: true,
  *   data: { ... },        // Los datos del endpoint
- *   message: "...",       // Mensaje opcional (si la respuesta original lo incluía)
+ *   message: "...",       // Mensaje opcional (si la respuesta original lo incluia)
  *   timestamp: "..."      // ISO timestamp
  * }
  *
@@ -46,7 +47,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
   private transformResponse(data: unknown): ApiResponse<T> {
     const timestamp = new Date().toISOString();
 
-    // Si no hay datos, retornar respuesta vacía exitosa
+    // Si no hay datos, retornar respuesta vacia exitosa
     if (data === null || data === undefined) {
       return {
         success: true,
@@ -60,26 +61,31 @@ export class ResponseInterceptor<T> implements NestInterceptor<
 
       // Extraer message si existe
       const { success, message, ...rest } = formatted;
+      const sanitizedRest = sanitizeResponseData(rest) as Record<
+        string,
+        unknown
+      >;
+      const restKeys = sanitizedRest ? Object.keys(sanitizedRest) : [];
 
       // Si solo tiene success y message, no envolver en data
       const hasOnlySuccessAndMessage =
-        Object.keys(rest).length === 0 ||
-        (Object.keys(rest).length === 1 && 'userId' in rest);
+        restKeys.length === 0 ||
+        (restKeys.length === 1 && 'userId' in sanitizedRest);
 
       if (hasOnlySuccessAndMessage) {
         return {
           success: success !== false,
           message,
-          ...(Object.keys(rest).length > 0 ? { data: rest as T } : {}),
+          ...(restKeys.length > 0 ? { data: sanitizedRest as T } : {}),
           timestamp,
         };
       }
 
-      // Si tiene más propiedades, todo va en data
+      // Propiedades van en data
       return {
         success: success !== false,
         message,
-        data: rest as T,
+        data: sanitizedRest as T,
         timestamp,
       };
     }
@@ -87,7 +93,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
     // Respuesta normal: envolver en data
     return {
       success: true,
-      data: data as T,
+      data: sanitizeResponseData(data) as T,
       timestamp,
     };
   }

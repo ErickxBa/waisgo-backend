@@ -11,7 +11,7 @@ export class RejectDriverDto {
   })
   @IsString()
   @IsNotEmpty({ message: ErrorMessages.ADMIN.REJECTION_REASON_REQUIRED })
-  @MinLength(10, { message: 'El motivo debe tener mínimo 10 caracteres' })
-  @MaxLength(500, { message: 'El motivo debe tener máximo 500 caracteres' })
+  @MinLength(10, { message: ErrorMessages.ADMIN.REJECTION_REASON_MIN_LENGTH })
+  @MaxLength(500, { message: ErrorMessages.ADMIN.REJECTION_REASON_MAX_LENGTH })
   motivo: string;
 }

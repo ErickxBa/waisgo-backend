@@ -9,6 +9,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -16,13 +17,13 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { VerificationService } from './verification.service';
-import { ConfirmOtpDto } from './Dto/confirm-otp.dto';
+import { ConfirmOtpDto } from './Dto';
 import { User } from 'src/modules/common/Decorators/user.decorator';
 import type { JwtPayload } from 'src/modules/common/types/jwt-payload.type';
-import type { AuthContext } from 'src/modules/common/types/auth-context.type';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { buildAuthContext } from '../common/utils/request-context.util';
 import { Roles } from '../common/Decorators/roles.decorator';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { RolUsuarioEnum } from '../auth/Enum';
 
 @ApiTags('Verification')
 @Controller('verification')
@@ -39,22 +40,10 @@ export class VerificationController {
    * Extrae el contexto de autenticación del request
    * para auditoría (IP, User-Agent)
    */
-  private getAuthContext(req: Request): AuthContext {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const ip =
-      typeof forwardedFor === 'string'
-        ? forwardedFor.split(',')[0].trim()
-        : req.ip || req.socket?.remoteAddress || 'unknown';
-
-    return {
-      ip,
-      userAgent: req.headers['user-agent'] || 'unknown',
-    };
-  }
-
   @Roles(RolUsuarioEnum.USER)
   @Post('send')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 600000 } })
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Enviar código de verificación por correo' })
   @ApiResponse({
@@ -80,7 +69,7 @@ export class VerificationController {
       );
     }
 
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     const safeUserId = await this.validateUserId(user.id);
     await this.verificationService.sendVerification(safeUserId, context);
 
@@ -93,6 +82,7 @@ export class VerificationController {
   @Roles(RolUsuarioEnum.USER)
   @Post('confirm')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Confirmar código de verificación' })
   @ApiResponse({
@@ -123,7 +113,7 @@ export class VerificationController {
       );
     }
 
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     const safeUserId = await this.validateUserId(user.id);
     await this.verificationService.confirmVerification(
       safeUserId,

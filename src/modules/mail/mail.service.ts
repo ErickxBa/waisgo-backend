@@ -13,8 +13,8 @@ import {
 } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
 
 @Injectable()
 export class MailService {
@@ -133,9 +133,7 @@ export class MailService {
         },
       });
 
-      throw new InternalServerErrorException(
-        'Error al enviar el correo electrónico. Por favor intente más tarde.',
-      );
+      throw new InternalServerErrorException(ErrorMessages.MAIL.SEND_FAILED);
     }
   }
 

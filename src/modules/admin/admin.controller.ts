@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Patch,
@@ -6,7 +7,6 @@ import {
   Body,
   HttpCode,
   HttpStatus,
-  ParseUUIDPipe,
   Query,
   Req,
   ParseEnumPipe,
@@ -20,38 +20,29 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 
-import { Roles } from '../common/Decorators/roles.decorator';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import type { AuthContext } from '../common/types/auth-context.type';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { Roles, User } from '../common/Decorators';
+import type { JwtPayload } from '../common/types';
+import { buildAuthContext } from '../common/utils/request-context.util';
+import { RolUsuarioEnum } from '../auth/Enum';
 import { AdminService } from './admin.service';
-import { RejectDriverDto } from './Dto/reject-driver.dto';
+import { RejectDriverDto } from './Dto';
 import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { isValidIdentifier } from '../common/utils/public-id.util';
 
 @ApiTags('Admin - Drivers')
 @ApiBearerAuth('access-token')
 @Controller('admin/drivers')
 export class AdminDriversController {
-  private readonly uuidPipe = new ParseUUIDPipe({ version: '4' });
-
   constructor(private readonly adminService: AdminService) {}
 
-  private async validateId(id: string): Promise<string> {
-    return this.uuidPipe.transform(id, { type: 'param', data: 'id' });
-  }
-
-  private getAuthContext(req: Request): AuthContext {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const ip =
-      typeof forwardedFor === 'string'
-        ? forwardedFor.split(',')[0].trim()
-        : req.ip || req.socket?.remoteAddress || 'unknown';
-
-    return {
-      ip,
-      userAgent: req.headers['user-agent'] || 'unknown',
-    };
+  private validateId(id: string): string {
+    if (!isValidIdentifier(id)) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT('id'),
+      );
+    }
+    return id;
   }
 
   @Roles(RolUsuarioEnum.ADMIN)
@@ -79,7 +70,7 @@ export class AdminDriversController {
   @ApiResponse({ status: 200, description: 'Detalle de la solicitud' })
   @ApiResponse({ status: 404, description: 'Solicitud no encontrada' })
   async getById(@Param('id') id: string) {
-    const safeId = await this.validateId(id);
+    const safeId = this.validateId(id);
     return this.adminService.getDriverDetail(safeId);
   }
 
@@ -95,8 +86,8 @@ export class AdminDriversController {
     @User() user: JwtPayload,
     @Req() req: Request,
   ) {
-    const safeId = await this.validateId(id);
-    const context = this.getAuthContext(req);
+    const safeId = this.validateId(id);
+    const context = buildAuthContext(req);
     return this.adminService.approveDriver(safeId, user.id, context);
   }
 
@@ -113,8 +104,8 @@ export class AdminDriversController {
     @User() user: JwtPayload,
     @Req() req: Request,
   ) {
-    const safeId = await this.validateId(id);
-    const context = this.getAuthContext(req);
+    const safeId = this.validateId(id);
+    const context = buildAuthContext(req);
     return this.adminService.rejectDriver(safeId, dto.motivo, user.id, context);
   }
 
@@ -130,8 +121,8 @@ export class AdminDriversController {
     @User() user: JwtPayload,
     @Req() req: Request,
   ) {
-    const safeId = await this.validateId(id);
-    const context = this.getAuthContext(req);
+    const safeId = this.validateId(id);
+    const context = buildAuthContext(req);
     return this.adminService.suspendDriver(safeId, user.id, context);
   }
 
@@ -146,8 +137,8 @@ export class AdminDriversController {
     @User() user: JwtPayload,
     @Req() req: Request,
   ) {
-    const safeId = await this.validateId(id);
-    const context = this.getAuthContext(req);
+    const safeId = this.validateId(id);
+    const context = buildAuthContext(req);
     return this.adminService.approveDocument(safeId, user.id, context);
   }
 
@@ -163,8 +154,8 @@ export class AdminDriversController {
     @User() user: JwtPayload,
     @Req() req: Request,
   ) {
-    const safeId = await this.validateId(id);
-    const context = this.getAuthContext(req);
+    const safeId = this.validateId(id);
+    const context = buildAuthContext(req);
     return this.adminService.rejectDocument(
       safeId,
       dto.motivo,

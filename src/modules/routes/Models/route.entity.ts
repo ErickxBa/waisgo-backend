@@ -11,8 +11,7 @@ import {
 } from 'typeorm';
 import { Driver } from '../../drivers/Models/driver.entity';
 import { RouteStop } from './route-stop.entity';
-import { CampusOrigenEnum } from '../Enums/campus-origen.enum';
-import { EstadoRutaEnum } from '../Enums/estado-ruta.enum';
+import { CampusOrigenEnum, EstadoRutaEnum } from '../Enums';
 
 @Entity({ schema: 'business', name: 'routes' })
 @Index('IDX_routes_driver_id', ['driverId'])
@@ -22,6 +21,9 @@ import { EstadoRutaEnum } from '../Enums/estado-ruta.enum';
 export class Route {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'varchar', length: 12, unique: true })
+  publicId: string;
 
   @Column({ type: 'uuid' })
   driverId: string;
@@ -50,6 +52,9 @@ export class Route {
 
   @Column({ type: 'int' })
   asientosDisponibles: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  precioPasajero: number;
 
   @Column({
     type: 'enum',

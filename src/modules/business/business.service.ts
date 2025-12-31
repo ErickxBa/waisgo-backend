@@ -4,9 +4,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { BusinessUser } from './Models/business-user.entity';
 import { UserProfile } from './Models/user-profile.entity';
 import { Repository, EntityManager } from 'typeorm';
-import { UpdateProfileDto } from './Dto/update-profile.dto';
+import { UpdateProfileDto } from './Dto';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { ConfigService } from '@nestjs/config';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditResult } from '../audit/Enums';
+import type { AuthContext } from '../common/types';
+import { generatePublicId } from '../common/utils/public-id.util';
 
 @Injectable()
 export class BusinessService {
@@ -19,6 +23,7 @@ export class BusinessService {
     private readonly profileRepo: Repository<UserProfile>,
     private readonly storageService: StorageService,
     private readonly config: ConfigService,
+    private readonly auditService: AuditService,
   ) {}
 
   private generateAlias(): string {
@@ -34,11 +39,14 @@ export class BusinessService {
       apellido: string;
       celular: string;
     },
-  ): Promise<void> {
+  ): Promise<{ publicId: string; alias: string }> {
+    const publicId = await generatePublicId(this.businessUserRepo, 'USR');
+    const alias = this.generateAlias();
     const businessUser = this.businessUserRepo.create({
       id: userId,
+      publicId,
       email: data.email,
-      alias: this.generateAlias(),
+      alias,
     });
 
     const profile = this.profileRepo.create({
@@ -53,6 +61,8 @@ export class BusinessService {
     await this.businessUserRepo.save(businessUser);
 
     this.logger.log(`Business user created: ${userId}`);
+
+    return { publicId, alias };
   }
 
   /**
@@ -67,11 +77,15 @@ export class BusinessService {
       apellido: string;
       celular: string;
     },
-  ): Promise<void> {
+  ): Promise<{ publicId: string; alias: string }> {
+    const businessRepo = manager.getRepository(BusinessUser);
+    const publicId = await generatePublicId(businessRepo, 'USR');
+    const alias = this.generateAlias();
     const businessUser = manager.create(BusinessUser, {
       id: userId,
+      publicId,
       email: data.email,
-      alias: this.generateAlias(),
+      alias,
     });
 
     const profile = manager.create(UserProfile, {
@@ -86,11 +100,14 @@ export class BusinessService {
     await manager.save(businessUser);
 
     this.logger.log(`Business user created with transaction: ${userId}`);
+
+    return { publicId, alias };
   }
 
   async updateProfile(
     userId: string,
     dto: UpdateProfileDto,
+    context?: AuthContext,
   ): Promise<{ message: string }> {
     const profile = await this.profileRepo.findOne({
       where: { userId },
@@ -115,10 +132,19 @@ export class BusinessService {
 
     this.logger.log(`Profile updated for user: ${userId}`);
 
+    await this.auditService.logEvent({
+      action: AuditAction.PROFILE_UPDATE,
+      userId,
+      result: AuditResult.SUCCESS,
+      ipAddress: context?.ip,
+      userAgent: context?.userAgent,
+      metadata: { changes: dto },
+    });
+
     return { message: ErrorMessages.USER.PROFILE_UPDATED };
   }
 
-  async softDeleteUser(userId: string): Promise<void> {
+  async softDeleteUser(userId: string, context?: AuthContext): Promise<void> {
     const result = await this.businessUserRepo.update(
       { id: userId, isDeleted: false },
       {
@@ -131,6 +157,14 @@ export class BusinessService {
       this.logger.warn(`User not found or already deleted: ${userId}`);
     } else {
       this.logger.log(`User soft deleted: ${userId}`);
+
+      await this.auditService.logEvent({
+        action: AuditAction.ACCOUNT_DEACTIVATED,
+        userId,
+        result: AuditResult.SUCCESS,
+        ipAddress: context?.ip,
+        userAgent: context?.userAgent,
+      });
     }
   }
 
@@ -187,6 +221,8 @@ export class BusinessService {
 
     return {
       id: user.id,
+      publicId: user.publicId,
+      alias: user.alias,
       email: user.email,
       nombre: user.profile.nombre,
       apellido: user.profile.apellido,
@@ -200,6 +236,7 @@ export class BusinessService {
   async updateProfilePhoto(
     userId: string,
     file: Express.Multer.File,
+    context?: AuthContext,
   ): Promise<{ message: string }> {
     const profile = await this.profileRepo.findOne({ where: { userId } });
 
@@ -218,7 +255,16 @@ export class BusinessService {
     profile.fotoPerfilUrl = objectPath;
     await this.profileRepo.save(profile);
 
-    return { message: 'Foto de perfil actualizada correctamente' };
+    await this.auditService.logEvent({
+      action: AuditAction.PROFILE_PHOTO_UPDATE,
+      userId,
+      result: AuditResult.SUCCESS,
+      ipAddress: context?.ip,
+      userAgent: context?.userAgent,
+      metadata: { objectPath },
+    });
+
+    return { message: ErrorMessages.USER.PROFILE_PHOTO_UPDATED };
   }
 
   private getDefaultAvatarUrl(): Promise<string> {

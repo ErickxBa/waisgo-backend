@@ -13,17 +13,18 @@ import { DriverDocument } from '../drivers/Models/driver-document.entity';
 import { AuthUser } from '../auth/Models/auth-user.entity';
 import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 import { EstadoDocumentoEnum } from '../drivers/Enums/estado-documento.enum';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { RolUsuarioEnum } from '../auth/Enum';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 import { MailService } from '../mail/mail.service';
 import { StorageService } from '../storage/storage.service';
-import type { AuthContext } from '../common/types/auth-context.type';
+import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { buildIdWhere } from '../common/utils/public-id.util';
 
 export interface DocumentWithSignedUrl {
   id: string;
+  publicId: string;
   tipo: string;
   archivoUrl: string;
   signedUrl: string;
@@ -35,7 +36,9 @@ export interface DocumentWithSignedUrl {
 
 export interface DriverListItem {
   id: string;
+  publicId: string;
   userId: string;
+  userPublicId?: string;
   paypalEmail: string;
   estado: EstadoConductorEnum;
   fechaSolicitud: Date;
@@ -89,7 +92,9 @@ export class AdminService {
 
     const driverList: DriverListItem[] = drivers.map((driver) => ({
       id: driver.id,
+      publicId: driver.publicId,
       userId: driver.userId,
+      userPublicId: driver.user?.publicId,
       paypalEmail: driver.paypalEmail,
       estado: driver.estado,
       fechaSolicitud: driver.fechaSolicitud,
@@ -115,7 +120,7 @@ export class AdminService {
    */
   async getDriverDetail(driverId: string): Promise<DriverDetailResponse> {
     const driver = await this.driverRepo.findOne({
-      where: { id: driverId },
+      where: buildIdWhere<Driver>(driverId),
       relations: ['user', 'user.profile', 'documents', 'vehicles'],
     });
 
@@ -144,6 +149,7 @@ export class AdminService {
     if (!bucket) {
       return documents.map((doc) => ({
         id: doc.id,
+        publicId: doc.publicId,
         tipo: doc.tipo,
         archivoUrl: doc.archivoUrl,
         signedUrl: '',
@@ -171,6 +177,7 @@ export class AdminService {
 
         return {
           id: doc.id,
+          publicId: doc.publicId,
           tipo: doc.tipo,
           archivoUrl: doc.archivoUrl,
           signedUrl,
@@ -197,7 +204,7 @@ export class AdminService {
 
     try {
       const driver = await queryRunner.manager.findOne(Driver, {
-        where: { id: driverId },
+        where: buildIdWhere<Driver>(driverId),
         relations: ['documents', 'user', 'user.profile'],
       });
 
@@ -279,7 +286,7 @@ export class AdminService {
     }
 
     const driver = await this.driverRepo.findOne({
-      where: { id: driverId },
+      where: buildIdWhere<Driver>(driverId),
       relations: ['user', 'user.profile'],
     });
 
@@ -326,7 +333,7 @@ export class AdminService {
     context: AuthContext,
   ): Promise<{ message: string }> {
     const driver = await this.driverRepo.findOne({
-      where: { id: driverId },
+      where: buildIdWhere<Driver>(driverId),
     });
 
     if (!driver) {
@@ -367,7 +374,7 @@ export class AdminService {
     context: AuthContext,
   ): Promise<{ message: string }> {
     const document = await this.documentRepo.findOne({
-      where: { id: documentId },
+      where: buildIdWhere<DriverDocument>(documentId),
     });
 
     if (!document) {
@@ -402,7 +409,7 @@ export class AdminService {
     context: AuthContext,
   ): Promise<{ message: string }> {
     const document = await this.documentRepo.findOne({
-      where: { id: documentId },
+      where: buildIdWhere<DriverDocument>(documentId),
     });
 
     if (!document) {

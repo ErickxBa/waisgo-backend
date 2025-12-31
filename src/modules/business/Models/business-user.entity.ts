@@ -16,6 +16,9 @@ export class BusinessUser {
   @PrimaryColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 12, unique: true })
+  publicId: string;
+
   @Column({ type: 'varchar', length: 30, unique: true })
   email: string;
 

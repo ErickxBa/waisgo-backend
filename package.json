@@ -13,15 +13,21 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test": "jest --config ./test/jest-unit.json",
+    "test:watch": "jest --config ./test/jest-unit.json --watch",
+    "test:cov": "jest --config ./test/jest-unit.json --coverage",
+    "test:cov:unit": "jest --config ./test/jest-unit.json --coverage --coverageDirectory coverage/unit",
+    "test:cov:integration": "npm run migration:run:test && jest --config ./test/jest-integration.json --runInBand --verbose --coverage --coverageDirectory coverage/integration",
+    "test:cov:e2e": "npm run migration:run:test && jest --config ./test/jest-e2e.json --runInBand --verbose --coverage --coverageDirectory coverage/e2e",
+    "test:cov:all": "npm run test:cov:unit && npm run test:cov:integration && npm run test:cov:e2e && node scripts/merge-coverage.js coverage/unit/lcov.info coverage/integration/lcov.info coverage/e2e/lcov.info --out coverage/lcov.info",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --config ./test/jest-unit.json --runInBand",
+    "test:e2e": "npm run migration:run:test && jest --config ./test/jest-e2e.json --runInBand --verbose",
+    "test:integration": "npm run migration:run:test && jest --config ./test/jest-integration.json --runInBand --verbose",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "npm run typeorm -- -d ormconfig.migration.ts migration:generate",
     "migration:create": "npm run typeorm -- -d ormconfig.migration.ts migration:create",
     "migration:run": "npm run typeorm -- -d ormconfig.migration.ts migration:run",
+    "migration:run:test": "node scripts/migration-run-test.js",
     "migration:revert": "npm run typeorm -- -d ormconfig.migration.ts migration:revert"
   },
   "dependencies": {
@@ -48,6 +54,7 @@
     "joi": "^18.0.2",
     "jose": "^4.15.5",
     "minio": "^8.0.6",
+    "nest-commander": "^3.20.1",
     "nodemailer": "^6.9.13",
     "oci-objectstorage": "^2.122.2",
     "oci-sdk": "^2.122.2",
@@ -103,7 +110,6 @@
     "testEnvironment": "node"
   },
   "overrides": {
-    "glob": "^11.0.0",
     "html-minifier": "^5.0.0",
     "mjml-core": "^4.18.1"
   }

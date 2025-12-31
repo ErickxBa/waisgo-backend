@@ -17,6 +17,9 @@ export class Vehicle {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 12, unique: true })
+  publicId: string;
+
   @Column({ type: 'uuid' })
   driverId: string;
 

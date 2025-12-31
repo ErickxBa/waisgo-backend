@@ -11,7 +11,7 @@ export class ConfirmOtpDto {
     maxLength: 6,
   })
   @IsNotEmpty({ message: ErrorMessages.VALIDATION.REQUIRED_FIELD('code') })
-  @IsString({ message: 'El código debe ser una cadena de texto' })
+  @IsString({ message: ErrorMessages.VALIDATION.INVALID_FORMAT('code') })
   @Length(6, 6, { message: ErrorMessages.VERIFICATION.CODE_FORMAT_INVALID })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,

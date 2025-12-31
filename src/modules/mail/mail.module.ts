@@ -5,7 +5,7 @@ import { AuditModule } from '../audit/audit.module';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { ConfigService } from '@nestjs/config';
-import { join } from 'path';
+import { join } from 'node:path';
 
 @Module({
   imports: [

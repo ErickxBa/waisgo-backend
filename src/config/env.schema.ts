@@ -69,4 +69,7 @@ export const envSchema = Joi.object({
   STORAGE_DRIVER: Joi.string().valid('minio', 'oci').default('minio'),
   STORAGE_PROFILE_BUCKET: Joi.string().required(),
   STORAGE_DRIVER_BUCKET: Joi.string().required(),
+
+  // Identifiers
+  ALLOW_UUID_IDENTIFIERS: Joi.boolean().default(true),
 });

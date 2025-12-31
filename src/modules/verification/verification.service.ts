@@ -3,13 +3,12 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { OtpService } from '../otp/otp.service';
 import { MailService } from '../mail/mail.service';
-import { EstadoVerificacionEnum } from '../auth/Enum/estado-ver.enum';
+import { EstadoVerificacionEnum } from '../auth/Enum';
 import { BusinessService } from '../business/business.service';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
-import type { AuthContext } from '../common/types/auth-context.type';
+import type { AuthContext } from '../common/types';
 import { validate as isUUID } from 'uuid';
 
 @Injectable()
@@ -31,7 +30,9 @@ export class VerificationService {
     const validate = isUUID as unknown as (str: string) => boolean;
 
     if (!validate(userId)) {
-      throw new BadRequestException('ID de usuario inválido');
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT('userId'),
+      );
     }
   }
 

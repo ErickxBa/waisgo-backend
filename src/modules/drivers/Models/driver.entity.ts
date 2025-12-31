@@ -12,7 +12,7 @@ import {
 import { BusinessUser } from '../../business/Models/business-user.entity';
 import { DriverDocument } from './driver-document.entity';
 import { Vehicle } from './vehicle.entity';
-import { EstadoConductorEnum } from '../Enums/estado-conductor.enum';
+import { EstadoConductorEnum } from '../Enums';
 
 @Entity({ schema: 'business', name: 'drivers' })
 @Index('IDX_drivers_estado', ['estado'])
@@ -20,6 +20,9 @@ import { EstadoConductorEnum } from '../Enums/estado-conductor.enum';
 export class Driver {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'varchar', length: 12, unique: true })
+  publicId: string;
 
   @Column({ type: 'uuid', unique: true })
   userId: string;

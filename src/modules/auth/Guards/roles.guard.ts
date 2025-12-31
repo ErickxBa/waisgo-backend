@@ -6,9 +6,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { RolUsuarioEnum } from '../Enum/users-roles.enum';
-import { ROLES_KEY } from 'src/modules/common/Decorators/roles.decorator';
+import { RolUsuarioEnum } from '../Enum';
+import { ROLES_KEY } from 'src/modules/common/Decorators';
 import type { Request } from 'express';
+import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -29,11 +30,21 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const user = request.user;
 
-    if (!user || !user.role) {
+    if (!user?.role) {
       this.logger.warn(
         'Usuario sin rol identificado intentó acceder a un recurso protegido por roles.',
       );
-      throw new ForbiddenException('Rol no identificado');
+      throw new ForbiddenException(ErrorMessages.SYSTEM.ROLE_NOT_IDENTIFIED);
+    }
+
+    if (
+      requiredRoles.some((role) => role !== RolUsuarioEnum.USER) &&
+      user.isVerified === false
+    ) {
+      this.logger.warn(
+        `Acceso denegado para usuario no verificado con rol: ${user.role}.`,
+      );
+      throw new ForbiddenException(ErrorMessages.USER.NOT_VERIFIED);
     }
 
     if (!requiredRoles.includes(user.role)) {
@@ -42,7 +53,7 @@ export class RolesGuard implements CanActivate {
           ', ',
         )}`,
       );
-      throw new ForbiddenException('Acceso denegado para su rol');
+      throw new ForbiddenException(ErrorMessages.SYSTEM.ACCESS_DENIED_ROLE);
     }
 
     return true;

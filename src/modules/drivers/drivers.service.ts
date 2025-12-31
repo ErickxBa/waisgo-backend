@@ -14,17 +14,19 @@ import { Driver } from './Models/driver.entity';
 import { DriverDocument } from './Models/driver-document.entity';
 import { Vehicle } from './Models/vehicle.entity';
 import { BusinessUser } from '../business/Models/business-user.entity';
-import { EstadoConductorEnum } from './Enums/estado-conductor.enum';
-import { EstadoDocumentoEnum } from './Enums/estado-documento.enum';
-import { TipoDocumentoEnum } from './Enums/tipo-documento.enum';
+import {
+  EstadoConductorEnum,
+  EstadoDocumentoEnum,
+  TipoDocumentoEnum,
+} from './Enums';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 import { MailService } from '../mail/mail.service';
 import { AuthService } from '../auth/auth.service';
-import type { AuthContext } from '../common/types/auth-context.type';
+import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
 
 export interface DriverDocumentWithUrl extends DriverDocument {
   signedUrl: string;
@@ -135,12 +137,13 @@ export class DriversService {
 
         return {
           message: ErrorMessages.DRIVER.APPLICATION_RESUBMITTED,
-          driverId: existingDriver.id,
+          driverId: existingDriver.publicId,
         };
       }
     }
 
     const driver = this.driverRepo.create({
+      publicId: await generatePublicId(this.driverRepo, 'DRV'),
       userId,
       paypalEmail,
       estado: EstadoConductorEnum.PENDIENTE,
@@ -168,7 +171,7 @@ export class DriversService {
 
     return {
       message: ErrorMessages.DRIVER.APPLICATION_SUBMITTED,
-      driverId: savedDriver.id,
+      driverId: savedDriver.publicId,
     };
   }
 
@@ -344,6 +347,7 @@ export class DriversService {
       document.motivoRechazo = null;
     } else {
       document = this.documentRepo.create({
+        publicId: await generatePublicId(this.documentRepo, 'DOC'),
         driverId: driver.id,
         tipo,
         archivoUrl: uploadResult,
@@ -366,7 +370,7 @@ export class DriversService {
 
     return {
       message: ErrorMessages.DRIVER.DOCUMENT_UPLOADED,
-      documentId: savedDocument.id,
+      documentId: savedDocument.publicId,
     };
   }
 
@@ -375,7 +379,7 @@ export class DriversService {
    */
   async getDriverById(driverId: string): Promise<Driver> {
     const driver = await this.driverRepo.findOne({
-      where: { id: driverId },
+      where: buildIdWhere<Driver>(driverId),
       relations: ['documents', 'vehicles', 'user', 'user.profile'],
     });
 

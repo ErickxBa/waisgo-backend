@@ -12,13 +12,15 @@ import { Repository } from 'typeorm';
 import { Vehicle } from '../drivers/Models/vehicle.entity';
 import { Driver } from '../drivers/Models/driver.entity';
 import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
-import { CreateVehicleDto } from './Dto/create-vehicle.dto';
-import { UpdateVehicleDto } from './Dto/update-vehicle.dto';
+import { CreateVehicleDto, UpdateVehicleDto } from './Dto';
 import { AuditService } from '../audit/audit.service';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
-import type { AuthContext } from '../common/types/auth-context.type';
+import { AuditAction, AuditResult } from '../audit/Enums';
+import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
+import {
+  buildIdWhere,
+  generatePublicId,
+} from '../common/utils/public-id.util';
 
 @Injectable()
 export class VehicleService {
@@ -72,6 +74,7 @@ export class VehicleService {
     }
 
     const vehicle = this.vehicleRepo.create({
+      publicId: await generatePublicId(this.vehicleRepo, 'VEH'),
       driverId: driver.id,
       marca: dto.marca.trim(),
       modelo: dto.modelo.trim(),
@@ -133,7 +136,10 @@ export class VehicleService {
     const driver = await this.getApprovedDriver(userId);
 
     const vehicle = await this.vehicleRepo.findOne({
-      where: { id: vehicleId, driverId: driver.id },
+      where: buildIdWhere<Vehicle>(vehicleId).map((where) => ({
+        ...where,
+        driverId: driver.id,
+      })),
     });
 
     if (!vehicle) {
@@ -196,7 +202,10 @@ export class VehicleService {
     const driver = await this.getApprovedDriver(userId);
 
     const vehicle = await this.vehicleRepo.findOne({
-      where: { id: vehicleId, driverId: driver.id },
+      where: buildIdWhere<Vehicle>(vehicleId).map((where) => ({
+        ...where,
+        driverId: driver.id,
+      })),
     });
 
     if (!vehicle) {
@@ -233,7 +242,10 @@ export class VehicleService {
     const driver = await this.getApprovedDriver(userId);
 
     const vehicle = await this.vehicleRepo.findOne({
-      where: { id: vehicleId, driverId: driver.id },
+      where: buildIdWhere<Vehicle>(vehicleId).map((where) => ({
+        ...where,
+        driverId: driver.id,
+      })),
     });
 
     if (!vehicle) {
@@ -273,7 +285,7 @@ export class VehicleService {
    */
   async getById(vehicleId: string): Promise<Vehicle> {
     const vehicle = await this.vehicleRepo.findOne({
-      where: { id: vehicleId },
+      where: buildIdWhere<Vehicle>(vehicleId),
       relations: ['driver'],
     });
 

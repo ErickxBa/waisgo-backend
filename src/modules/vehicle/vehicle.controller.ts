@@ -18,14 +18,15 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 
-import { Roles } from '../common/Decorators/roles.decorator';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import type { AuthContext } from '../common/types/auth-context.type';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { Roles, User } from '../common/Decorators';
+import type { JwtPayload } from '../common/types';
+import {
+  buildAuthContext,
+  validateIdentifier,
+} from '../common/utils/request-context.util';
+import { RolUsuarioEnum } from '../auth/Enum';
 import { VehicleService } from './vehicle.service';
-import { CreateVehicleDto } from './Dto/create-vehicle.dto';
-import { UpdateVehicleDto } from './Dto/update-vehicle.dto';
+import { CreateVehicleDto, UpdateVehicleDto } from './Dto';
 
 @ApiTags('Vehicles')
 @ApiBearerAuth('access-token')
@@ -40,20 +41,7 @@ export class VehiclesController {
   }
 
   private async validateVehicleId(vehicleId: string): Promise<string> {
-    return this.uuidPipe.transform(vehicleId, { type: 'param', data: 'id' });
-  }
-
-  private getAuthContext(req: Request): AuthContext {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const ip =
-      typeof forwardedFor === 'string'
-        ? forwardedFor.split(',')[0].trim()
-        : req.ip || req.socket?.remoteAddress || 'unknown';
-
-    return {
-      ip,
-      userAgent: req.headers['user-agent'] || 'unknown',
-    };
+    return validateIdentifier(vehicleId);
   }
 
   @Roles(RolUsuarioEnum.CONDUCTOR)
@@ -73,7 +61,7 @@ export class VehiclesController {
     @Req() req: Request,
   ) {
     const safeUserId = await this.validateUserId(user.id);
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.vehicleService.create(safeUserId, dto, context);
   }
 
@@ -101,7 +89,7 @@ export class VehiclesController {
   ) {
     const safeUserId = await this.validateUserId(user.id);
     const safeVehicleId = await this.validateVehicleId(id);
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.vehicleService.update(safeUserId, safeVehicleId, dto, context);
   }
 
@@ -118,7 +106,7 @@ export class VehiclesController {
   ) {
     const safeUserId = await this.validateUserId(user.id);
     const safeVehicleId = await this.validateVehicleId(id);
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.vehicleService.disable(safeUserId, safeVehicleId, context);
   }
 
@@ -141,7 +129,7 @@ export class VehiclesController {
   ) {
     const safeUserId = await this.validateUserId(user.id);
     const safeVehicleId = await this.validateVehicleId(id);
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.vehicleService.reactivate(safeUserId, safeVehicleId, context);
   }
 }

@@ -22,7 +22,7 @@ async function bootstrap() {
     origin: process.env.FRONTEND_URL || 'http://localhost:4200',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
   });
 
   // Interceptor para estandarizar respuestas exitosas
@@ -69,4 +69,4 @@ async function bootstrap() {
     `Swagger Docs available at http://localhost:${configService.get<number>('PORT') ?? 3000}/api/docs`,
   );
 }
-void bootstrap();
+void bootstrap(); // NOSONAR

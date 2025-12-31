@@ -12,6 +12,6 @@ export class ApplyDriverDto {
   @IsNotEmpty({
     message: ErrorMessages.VALIDATION.REQUIRED_FIELD('paypalEmail'),
   })
-  @MaxLength(254, { message: 'El email no puede superar 254 caracteres' })
+  @MaxLength(254, { message: ErrorMessages.DRIVER.PAYPAL_EMAIL_MAX_LENGTH })
   paypalEmail: string;
 }

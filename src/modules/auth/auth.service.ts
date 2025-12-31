@@ -11,24 +11,21 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { EncryptJWT } from 'jose';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 
-import { EstadoVerificacionEnum } from './Enum/estado-ver.enum';
-import { AuditAction } from '../audit/Enums/audit-actions.enum';
-import { AuditResult } from '../audit/Enums/audit-result.enum';
+import { EstadoVerificacionEnum, RolUsuarioEnum } from './Enum';
+import { AuditAction, AuditResult } from '../audit/Enums';
 
-import { LoginDto } from './Dto/login.dto';
-import { AuthContext } from '../common/types/auth-context.type';
+import { LoginDto, RegisterUserDto } from './Dto';
+import { AuthContext } from '../common/types';
 
 import { AuditService } from './../audit/audit.service';
 import { RedisService } from 'src/redis/redis.service';
 import { MailService } from 'src/modules/mail/mail.service';
 import { AuthUser } from './Models/auth-user.entity';
 import { BusinessService } from '../business/business.service';
-import { RegisterUserDto } from './Dto/register-user.dto';
-import { RolUsuarioEnum } from './Enum/users-roles.enum';
 
 @Injectable()
 export class AuthService {
@@ -115,16 +112,17 @@ export class AuthService {
 
       await queryRunner.manager.save(authUser);
 
-      await this.businessService.createFromAuthWithManager(
-        queryRunner.manager,
-        userId,
-        {
-          email,
-          nombre,
-          apellido,
-          celular,
-        },
-      );
+      const businessIdentity =
+        await this.businessService.createFromAuthWithManager(
+          queryRunner.manager,
+          userId,
+          {
+            email,
+            nombre,
+            apellido,
+            celular,
+          },
+        );
 
       await queryRunner.commitTransaction();
 
@@ -142,7 +140,8 @@ export class AuthService {
 
       return {
         success: true,
-        userId,
+        userId: businessIdentity.publicId,
+        alias: businessIdentity.alias,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -162,7 +161,7 @@ export class AuthService {
         relations: ['credential'],
       });
 
-      if (!user || !user.credential) {
+      if (!user?.credential) {
         this.logger.warn(`Intento de login fallido para email: ${email}`);
         throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
       }
@@ -227,7 +226,9 @@ export class AuthService {
       this.logger.error(
         `${error instanceof Error ? error.name : 'Error'}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
       );
-      throw new InternalServerErrorException('Error inesperado en login');
+      throw new InternalServerErrorException(
+        ErrorMessages.SYSTEM.INTERNAL_ERROR,
+      );
     }
   }
 

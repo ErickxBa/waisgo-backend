@@ -7,11 +7,12 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Patch,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { Roles } from '../common/Decorators/roles.decorator';
-import { RolUsuarioEnum } from '../auth/Enum/users-roles.enum';
+import { Roles, User } from '../common/Decorators';
+import { RolUsuarioEnum } from '../auth/Enum';
 import {
   ApiBearerAuth,
   ApiConsumes,
@@ -20,11 +21,12 @@ import {
   ApiTags,
   ApiBody,
 } from '@nestjs/swagger';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import { UpdateProfileDto } from './Dto/update-profile.dto';
+import type { JwtPayload } from '../common/types';
+import { buildAuthContext } from '../common/utils/request-context.util';
+import { UpdateProfileDto } from './Dto';
 import { BusinessService } from './business.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request } from 'express';
 
 @ApiTags('Business')
 @Controller('business')
@@ -85,9 +87,17 @@ export class BusinessController {
     status: 403,
     description: 'Acceso denegado. Solo usuarios con rol PASAJERO.',
   })
-  async updateProfile(@User() user: JwtPayload, @Body() dto: UpdateProfileDto) {
+  async updateProfile(
+    @User() user: JwtPayload,
+    @Body() dto: UpdateProfileDto,
+    @Req() req: Request,
+  ) {
     const safeUserId = await this.validateUserId(user.id);
-    return await this.businessService.updateProfile(safeUserId, dto);
+    return await this.businessService.updateProfile(
+      safeUserId,
+      dto,
+      buildAuthContext(req),
+    );
   }
 
   @Roles(RolUsuarioEnum.PASAJERO)
@@ -127,8 +137,13 @@ export class BusinessController {
   async updateProfilePhoto(
     @User() user: JwtPayload,
     @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
   ) {
-    return this.businessService.updateProfilePhoto(user.id, file);
+    return this.businessService.updateProfilePhoto(
+      user.id,
+      file,
+      buildAuthContext(req),
+    );
   }
 
   @Roles(
@@ -153,9 +168,12 @@ export class BusinessController {
     status: 401,
     description: 'Token no proporcionado o inválido.',
   })
-  async deleteAccount(@User() user: JwtPayload) {
+  async deleteAccount(@User() user: JwtPayload, @Req() req: Request) {
     const safeUserId = await this.validateUserId(user.id);
-    return await this.businessService.softDeleteUser(safeUserId);
+    return await this.businessService.softDeleteUser(
+      safeUserId,
+      buildAuthContext(req),
+    );
   }
 
   @Roles(

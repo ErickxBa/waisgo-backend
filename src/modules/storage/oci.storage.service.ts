@@ -1,15 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StorageProvider } from './Interface/storage.interface';
 import * as common from 'oci-common';
 import * as objectstorage from 'oci-objectstorage';
 import * as path from 'node:path';
+import { ErrorMessages } from '../common/constants/error-messages.constant';
 
 @Injectable()
 export class OciStorageService implements StorageProvider {
   private readonly client: objectstorage.ObjectStorageClient;
   private readonly namespace: string;
   private readonly region: string;
+  private readonly logger = new Logger(OciStorageService.name);
 
   constructor(private readonly configService: ConfigService) {
     const provider = new common.ConfigFileAuthenticationDetailsProvider(
@@ -31,13 +37,22 @@ export class OciStorageService implements StorageProvider {
     const safeFilename = filename.replaceAll(/\s+/g, '_');
     const objectName = path.posix.join(folder, safeFilename);
 
-    await this.client.putObject({
-      namespaceName: this.namespace,
-      bucketName: bucket,
-      objectName,
-      putObjectBody: buffer,
-      contentType: mimetype,
-    });
+    try {
+      await this.client.putObject({
+        namespaceName: this.namespace,
+        bucketName: bucket,
+        objectName,
+        putObjectBody: buffer,
+        contentType: mimetype,
+      });
+    } catch (error) {
+      this.logger.error(
+        `OCI upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw new InternalServerErrorException(
+        ErrorMessages.STORAGE.UPLOAD_FAILED,
+      );
+    }
 
     return objectName;
   }

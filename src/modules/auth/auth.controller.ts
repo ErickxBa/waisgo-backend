@@ -18,17 +18,17 @@ import {
 } from '@nestjs/swagger';
 
 import { AuthService } from './auth.service';
-import { LoginDto } from './Dto/login.dto';
-import { ForgotPasswordDto } from './Dto/forgot-password.dto';
-import { ResetPasswordDto } from './Dto/reset-password.dto';
-import { Public } from '../common/Decorators/public.decorator';
-import { User } from '../common/Decorators/user.decorator';
-import type { JwtPayload } from '../common/types/jwt-payload.type';
-import type { AuthContext } from '../common/types/auth-context.type';
-import { RegisterUserDto } from './Dto/register-user.dto';
-import { UpdatePasswordDto } from './Dto/update-password.dto';
-import { RolUsuarioEnum } from './Enum/users-roles.enum';
-import { Roles } from '../common/Decorators/roles.decorator';
+import {
+  LoginDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  RegisterUserDto,
+  UpdatePasswordDto,
+} from './Dto';
+import { Public, User, Roles } from '../common/Decorators';
+import type { JwtPayload } from '../common/types';
+import { buildAuthContext } from '../common/utils/request-context.util';
+import { RolUsuarioEnum } from './Enum';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -45,19 +45,6 @@ export class AuthController {
    * Extrae el contexto de autenticación del request
    * para auditoría (IP, User-Agent)
    */
-  private getAuthContext(req: Request): AuthContext {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const ip =
-      typeof forwardedFor === 'string'
-        ? forwardedFor.split(',')[0].trim()
-        : req.ip || req.socket?.remoteAddress || 'unknown';
-
-    return {
-      ip,
-      userAgent: req.headers['user-agent'] || 'unknown',
-    };
-  }
-
   @Public()
   @Post('register')
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
@@ -71,7 +58,7 @@ export class AuthController {
     description: 'Datos inválidos o correo ya registrado.',
   })
   async register(@Body() dto: RegisterUserDto, @Req() req: Request) {
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.authService.register(dto, context);
   }
 
@@ -90,7 +77,7 @@ export class AuthController {
   })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.authService.login(dto, context);
   }
 
@@ -108,7 +95,7 @@ export class AuthController {
   })
   @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 intentos en 5 minutos
   forgot(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.authService.forgotPassword(dto.email, context);
   }
 
@@ -125,7 +112,7 @@ export class AuthController {
     description: 'Token inválido, expirado o contraseña débil.',
   })
   reset(@Body() dto: ResetPasswordDto, @Req() req: Request) {
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     return this.authService.resetPassword(dto.token, dto.newPassword, context);
   }
 
@@ -139,7 +126,7 @@ export class AuthController {
     description: 'Token no proporcionado o inválido.',
   })
   logout(@User() user: JwtPayload, @Req() req: Request) {
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     const nowInSeconds = Math.floor(Date.now() / 1000);
     const expSeconds = Math.max(0, user.exp - nowInSeconds);
 
@@ -179,7 +166,7 @@ export class AuthController {
     @Body() dto: UpdatePasswordDto,
     @Req() req: Request,
   ) {
-    const context = this.getAuthContext(req);
+    const context = buildAuthContext(req);
     const safeUserId = await this.validateUserId(user.id);
 
     return this.authService.changePassword(
