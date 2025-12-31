@@ -338,7 +338,7 @@ export class RoutesService {
           ? { route, distance: minDistance }
           : null;
       })
-      .filter((item): item is { route: Route; distance: number } => Boolean(item))
+      .filter((item): item is { route: Route; distance: number } => item !== null)
       .sort((a, b) => a.distance - b.distance)
       .map((item) => item.route);
 

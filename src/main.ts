@@ -69,4 +69,4 @@ async function bootstrap() {
     `Swagger Docs available at http://localhost:${configService.get<number>('PORT') ?? 3000}/api/docs`,
   );
 }
-void bootstrap();
+void bootstrap(); // NOSONAR

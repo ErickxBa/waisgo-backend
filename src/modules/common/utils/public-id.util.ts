@@ -7,8 +7,6 @@ const PUBLIC_ID_LENGTH = 8;
 export const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const PUBLIC_ID_REGEX = /^[A-Z]{3}_[A-Z0-9]{8}$/i;
-export const IDENTIFIER_REGEX =
-  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Z]{3}_[A-Z0-9]{8})$/i;
 
 const allowUuidIdentifiers = (): boolean => {
   const raw = process.env.ALLOW_UUID_IDENTIFIERS;
@@ -34,8 +32,8 @@ const buildRandomPart = (length = PUBLIC_ID_LENGTH): string => {
 
 export const isValidIdentifier = (value: string): boolean =>
   allowUuidIdentifiers()
-    ? IDENTIFIER_REGEX.test(value)
-    : PUBLIC_ID_REGEX.test(value);
+    ? isUuid(value) || isPublicId(value)
+    : isPublicId(value);
 
 export const buildIdWhere = <T extends { id: string; publicId: string }>(
   identifier: string,

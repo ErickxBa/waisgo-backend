@@ -38,7 +38,7 @@ export class JweAuthGuard implements CanActivate {
   ) {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
 
-    if (!jwtSecret || jwtSecret.length !== 32) {
+    if (jwtSecret?.length !== 32) {
       throw new Error(
         'JWT_SECRET debe existir y tener EXACTAMENTE 32 caracteres',
       );

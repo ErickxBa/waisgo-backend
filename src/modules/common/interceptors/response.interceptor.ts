@@ -61,7 +61,10 @@ export class ResponseInterceptor<T> implements NestInterceptor<
 
       // Extraer message si existe
       const { success, message, ...rest } = formatted;
-      const sanitizedRest = sanitizeResponseData(rest) as Record<string, unknown>;
+      const sanitizedRest = sanitizeResponseData(rest) as Record<
+        string,
+        unknown
+      >;
       const restKeys = sanitizedRest ? Object.keys(sanitizedRest) : [];
 
       // Si solo tiene success y message, no envolver en data
@@ -78,7 +81,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
         };
       }
 
-      // Si tiene mas propiedades, todo va en data
+      // Propiedades van en data
       return {
         success: success !== false,
         message,

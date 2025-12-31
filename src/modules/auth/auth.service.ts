@@ -11,7 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { EncryptJWT } from 'jose';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 
@@ -112,16 +112,17 @@ export class AuthService {
 
       await queryRunner.manager.save(authUser);
 
-      const businessIdentity = await this.businessService.createFromAuthWithManager(
-        queryRunner.manager,
-        userId,
-        {
-          email,
-          nombre,
-          apellido,
-          celular,
-        },
-      );
+      const businessIdentity =
+        await this.businessService.createFromAuthWithManager(
+          queryRunner.manager,
+          userId,
+          {
+            email,
+            nombre,
+            apellido,
+            celular,
+          },
+        );
 
       await queryRunner.commitTransaction();
 
@@ -160,7 +161,7 @@ export class AuthService {
         relations: ['credential'],
       });
 
-      if (!user || !user.credential) {
+      if (!user?.credential) {
         this.logger.warn(`Intento de login fallido para email: ${email}`);
         throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
       }
@@ -225,7 +226,9 @@ export class AuthService {
       this.logger.error(
         `${error instanceof Error ? error.name : 'Error'}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
       );
-      throw new InternalServerErrorException(ErrorMessages.SYSTEM.INTERNAL_ERROR);
+      throw new InternalServerErrorException(
+        ErrorMessages.SYSTEM.INTERNAL_ERROR,
+      );
     }
   }
 

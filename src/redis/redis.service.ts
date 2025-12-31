@@ -58,7 +58,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (!key || typeof key !== 'string') {
       throw new Error('Redis key must be a non-empty string');
     }
-    if (/[\s\n\r\0]/.test(key)) {
+    if (/[\s\0]/.test(key)) {
       throw new Error('Redis key contains invalid characters');
     }
     if (key.length > 512) {

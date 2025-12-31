@@ -14,6 +14,13 @@
   "moduleNameMapper": {
     "^src/(.*)$": "<rootDir>/src/$1"
   },
-  "collectCoverageFrom": ["<rootDir>/src/**/*.(t|j)s"],
+  "collectCoverageFrom": [
+    "<rootDir>/src/**/*.(t|j)s",
+    "!<rootDir>/src/**/Dto/**",
+    "!<rootDir>/src/**/Enums/**",
+    "!<rootDir>/src/**/Models/**",
+    "!<rootDir>/src/migrations/**",
+    "!<rootDir>/src/**/types/**"
+  ],
   "coverageDirectory": "<rootDir>/coverage"
 }

@@ -30,7 +30,7 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const user = request.user;
 
-    if (!user || !user.role) {
+    if (!user?.role) {
       this.logger.warn(
         'Usuario sin rol identificado intentó acceder a un recurso protegido por roles.',
       );

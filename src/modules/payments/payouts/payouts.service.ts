@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import { URLSearchParams } from 'url';
+import { URLSearchParams } from 'node:url';
 
 import { Payout } from '../Models/payout.entity';
 import { Payment } from '../Models/payment.entity';
@@ -17,7 +17,10 @@ import { AuditService } from '../../audit/audit.service';
 import { AuditAction, AuditResult } from '../../audit/Enums';
 import { ErrorMessages } from '../../common/constants/error-messages.constant';
 import type { AuthContext } from '../../common/types';
-import { buildIdWhere, generatePublicId } from '../../common/utils/public-id.util';
+import {
+  buildIdWhere,
+  generatePublicId,
+} from '../../common/utils/public-id.util';
 import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 
 type PaypalPayoutResponse = {
@@ -129,8 +132,12 @@ export class PayoutsService {
       .orderBy('payout.createdAt', 'DESC');
 
     if (status) {
-      if (!Object.values(EstadoPayoutEnum).includes(status as EstadoPayoutEnum)) {
-        throw new BadRequestException(ErrorMessages.VALIDATION.INVALID_FORMAT('status'));
+      if (
+        !Object.values(EstadoPayoutEnum).includes(status as EstadoPayoutEnum)
+      ) {
+        throw new BadRequestException(
+          ErrorMessages.VALIDATION.INVALID_FORMAT('status'),
+        );
       }
       query.andWhere('payout.status = :status', { status });
     }
@@ -313,7 +320,9 @@ export class PayoutsService {
     }
 
     if (!payout.driver?.paypalEmail) {
-      throw new BadRequestException(ErrorMessages.PAYMENTS.INVALID_PAYPAL_ACCOUNT);
+      throw new BadRequestException(
+        ErrorMessages.PAYMENTS.INVALID_PAYPAL_ACCOUNT,
+      );
     }
 
     try {
@@ -358,7 +367,10 @@ export class PayoutsService {
           result: AuditResult.SUCCESS,
           ipAddress: context?.ip,
           userAgent: context?.userAgent,
-          metadata: { payoutId: payout.id, paypalBatchId: payout.paypalBatchId },
+          metadata: {
+            payoutId: payout.id,
+            paypalBatchId: payout.paypalBatchId,
+          },
         });
       }
 
@@ -478,8 +490,12 @@ export class PayoutsService {
       .take(pageSize);
 
     if (status) {
-      if (!Object.values(EstadoPayoutEnum).includes(status as EstadoPayoutEnum)) {
-        throw new BadRequestException(ErrorMessages.VALIDATION.INVALID_FORMAT('status'));
+      if (
+        !Object.values(EstadoPayoutEnum).includes(status as EstadoPayoutEnum)
+      ) {
+        throw new BadRequestException(
+          ErrorMessages.VALIDATION.INVALID_FORMAT('status'),
+        );
       }
       query.andWhere('payout.status = :status', { status });
     }

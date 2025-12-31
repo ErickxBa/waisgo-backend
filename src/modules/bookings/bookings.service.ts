@@ -6,8 +6,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { randomInt } from 'crypto';
+import { EntityManager, Repository } from 'typeorm';
+import { randomInt } from 'node:crypto';
 import { Booking } from './Models/booking.entity';
 import { CreateBookingDto } from './Dto';
 import { EstadoReservaEnum } from './Enums';
@@ -24,6 +24,13 @@ import { AuditAction, AuditResult } from '../audit/Enums';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
 import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
+
+type PickupDetails = {
+  hasPickup: boolean;
+  pickupLat?: number;
+  pickupLng?: number;
+  pickupDireccion?: string;
+};
 
 @Injectable()
 export class BookingsService {
@@ -52,7 +59,193 @@ export class BookingsService {
   private generateOtp(): string {
     // randomInt es criptográficamente seguro (usa crypto.randomBytes internamente)
     return randomInt(100000, 1000000).toString();
-  } 
+  }
+
+  private validatePickup(dto: CreateBookingDto): PickupDetails {
+    const pickupLat = dto.pickupLat;
+    const pickupLng = dto.pickupLng;
+    const pickupDireccion = dto.pickupDireccion?.trim();
+
+    const hasPickupLat = pickupLat !== undefined && pickupLat !== null;
+    const hasPickupLng = pickupLng !== undefined && pickupLng !== null;
+    const hasPickup = hasPickupLat || hasPickupLng || Boolean(pickupDireccion);
+
+    if (!hasPickup) {
+      return { hasPickup: false };
+    }
+
+    if (!hasPickupLat || !hasPickupLng) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.INVALID_FORMAT('pickupCoords'),
+      );
+    }
+
+    if (!pickupDireccion) {
+      throw new BadRequestException(
+        ErrorMessages.VALIDATION.REQUIRED_FIELD('pickupDireccion'),
+      );
+    }
+
+    return {
+      hasPickup: true,
+      pickupLat,
+      pickupLng,
+      pickupDireccion,
+    };
+  }
+
+  private assertRouteIsBookable(route: Route): void {
+    if (route.estado !== EstadoRutaEnum.ACTIVA) {
+      throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_NOT_ACTIVE);
+    }
+
+    if (route.asientosDisponibles <= 0) {
+      throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_FULL);
+    }
+
+    if (Number(route.precioPasajero) <= 0) {
+      throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_PRICE_REQUIRED);
+    }
+  }
+
+  private async insertPickupStop(
+    stopRepo: Repository<RouteStop>,
+    routeId: string,
+    pickup: PickupDetails,
+  ): Promise<void> {
+    if (
+      !pickup.hasPickup ||
+      pickup.pickupLat === undefined ||
+      pickup.pickupLng === undefined ||
+      !pickup.pickupDireccion
+    ) {
+      return;
+    }
+
+    const stops = await stopRepo.find({
+      where: { routeId },
+      order: { orden: 'ASC' },
+    });
+
+    let insertIndex = stops.length;
+
+    if (stops.length > 1) {
+      let bestExtraDistance = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < stops.length - 1; i += 1) {
+        const current = stops[i];
+        const next = stops[i + 1];
+        const extra =
+          this.haversineDistance(
+            Number(current.lat),
+            Number(current.lng),
+            pickup.pickupLat,
+            pickup.pickupLng,
+          ) +
+          this.haversineDistance(
+            pickup.pickupLat,
+            pickup.pickupLng,
+            Number(next.lat),
+            Number(next.lng),
+          ) -
+          this.haversineDistance(
+            Number(current.lat),
+            Number(current.lng),
+            Number(next.lat),
+            Number(next.lng),
+          );
+
+        if (extra < bestExtraDistance) {
+          bestExtraDistance = extra;
+          insertIndex = i + 1;
+        }
+      }
+    }
+
+    if (stops.length === 1) {
+      insertIndex = 1;
+    }
+
+    const newOrder = insertIndex + 1;
+    const updates = stops
+      .filter((stop) => stop.orden >= newOrder)
+      .map((stop) => ({ ...stop, orden: stop.orden + 1 }));
+
+    if (updates.length > 0) {
+      await stopRepo.save(updates);
+    }
+
+    const newStop = stopRepo.create({
+      routeId,
+      publicId: await generatePublicId(stopRepo, 'STP'),
+      lat: pickup.pickupLat,
+      lng: pickup.pickupLng,
+      direccion: pickup.pickupDireccion,
+      orden: newOrder,
+    });
+
+    await stopRepo.save(newStop);
+  }
+
+  private async createBookingTransaction(
+    manager: EntityManager,
+    passengerId: string,
+    dto: CreateBookingDto,
+    pickup: PickupDetails,
+  ): Promise<{
+    bookingId: string;
+    bookingPublicId: string;
+    otp: string;
+    routeId: string;
+  }> {
+    const routeRepo = manager.getRepository(Route);
+    const bookingRepo = manager.getRepository(Booking);
+    const stopRepo = manager.getRepository(RouteStop);
+
+    const route = await routeRepo.findOne({
+      where: buildIdWhere<Route>(dto.routeId),
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!route) {
+      throw new NotFoundException(ErrorMessages.ROUTES.ROUTE_NOT_FOUND);
+    }
+
+    this.assertRouteIsBookable(route);
+
+    const existing = await bookingRepo.findOne({
+      where: { routeId: route.id, passengerId },
+    });
+
+    if (existing) {
+      throw new BadRequestException(ErrorMessages.BOOKINGS.ALREADY_BOOKED);
+    }
+
+    const generatedOtp = this.generateOtp();
+
+    const booking = bookingRepo.create({
+      publicId: await generatePublicId(bookingRepo, 'BKG'),
+      routeId: route.id,
+      passengerId,
+      estado: EstadoReservaEnum.CONFIRMADA,
+      otp: generatedOtp,
+      otpUsado: false,
+      metodoPago: dto.metodoPago,
+    });
+
+    const savedBooking = await bookingRepo.save(booking);
+
+    route.asientosDisponibles = Math.max(route.asientosDisponibles - 1, 0);
+    await routeRepo.save(route);
+
+    await this.insertPickupStop(stopRepo, route.id, pickup);
+
+    return {
+      bookingId: savedBooking.id,
+      bookingPublicId: savedBooking.publicId,
+      otp: generatedOtp,
+      routeId: route.id,
+    };
+  }
 
   private toRad(deg: number): number {
     return deg * (Math.PI / 180);
@@ -160,156 +353,13 @@ export class BookingsService {
       throw new BadRequestException(ErrorMessages.BOOKINGS.PASSENGER_HAS_DEBT);
     }
 
-    const hasPickupLat = dto.pickupLat !== undefined && dto.pickupLat !== null;
-    const hasPickupLng = dto.pickupLng !== undefined && dto.pickupLng !== null;
-    const pickupDireccion = dto.pickupDireccion?.trim();
-    const hasPickup = hasPickupLat || hasPickupLng || Boolean(pickupDireccion);
+    const pickup = this.validatePickup(dto);
 
-    if (hasPickup) {
-      if (!hasPickupLat || !hasPickupLng) {
-        throw new BadRequestException(
-          ErrorMessages.VALIDATION.INVALID_FORMAT('pickupCoords'),
-        );
-      }
-      if (!pickupDireccion) {
-        throw new BadRequestException(
-          ErrorMessages.VALIDATION.REQUIRED_FIELD('pickupDireccion'),
-        );
-      }
-    }
+    const result = await this.bookingRepository.manager.transaction((manager) =>
+      this.createBookingTransaction(manager, passengerId, dto, pickup),
+    );
 
-    let bookingId: string | undefined;
-    let bookingPublicId: string | undefined;
-    let routeInternalId: string | undefined;
-    let otp: string | undefined;
-
-    await this.bookingRepository.manager.transaction(async (manager) => {
-      const routeRepo = manager.getRepository(Route);
-      const bookingRepo = manager.getRepository(Booking);
-      const stopRepo = manager.getRepository(RouteStop);
-
-      const route = await routeRepo.findOne({
-        where: buildIdWhere<Route>(dto.routeId),
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!route) {
-        throw new NotFoundException(ErrorMessages.ROUTES.ROUTE_NOT_FOUND);
-      }
-
-      if (route.estado !== EstadoRutaEnum.ACTIVA) {
-        throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_NOT_ACTIVE);
-      }
-
-      if (route.asientosDisponibles <= 0) {
-        throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_FULL);
-      }
-
-      if (Number(route.precioPasajero) <= 0) {
-        throw new BadRequestException(
-          ErrorMessages.ROUTES.ROUTE_PRICE_REQUIRED,
-        );
-      }
-
-      routeInternalId = route.id;
-
-      const existing = await bookingRepo.findOne({
-        where: { routeId: route.id, passengerId },
-      });
-
-      if (existing) {
-        throw new BadRequestException(ErrorMessages.BOOKINGS.ALREADY_BOOKED);
-      }
-
-      const generatedOtp = this.generateOtp();
-
-      const booking = bookingRepo.create({
-        publicId: await generatePublicId(bookingRepo, 'BKG'),
-        routeId: route.id,
-        passengerId,
-        estado: EstadoReservaEnum.CONFIRMADA,
-        otp: generatedOtp,
-        otpUsado: false,
-        metodoPago: dto.metodoPago,
-      });
-
-      const savedBooking = await bookingRepo.save(booking);
-      bookingId = savedBooking.id;
-      bookingPublicId = savedBooking.publicId;
-      otp = generatedOtp;
-
-      route.asientosDisponibles = Math.max(route.asientosDisponibles - 1, 0);
-      await routeRepo.save(route);
-
-      if (hasPickup && hasPickupLat && hasPickupLng && pickupDireccion) {
-        const stops = await stopRepo.find({
-          where: { routeId: route.id },
-          order: { orden: 'ASC' },
-        });
-
-        let insertIndex = stops.length;
-
-        if (stops.length > 1) {
-          let bestExtraDistance = Number.POSITIVE_INFINITY;
-          for (let i = 0; i < stops.length - 1; i += 1) {
-            const current = stops[i];
-            const next = stops[i + 1];
-            const extra =
-              this.haversineDistance(
-                Number(current.lat),
-                Number(current.lng),
-                dto.pickupLat as number,
-                dto.pickupLng as number,
-              ) +
-              this.haversineDistance(
-                dto.pickupLat as number,
-                dto.pickupLng as number,
-                Number(next.lat),
-                Number(next.lng),
-              ) -
-              this.haversineDistance(
-                Number(current.lat),
-                Number(current.lng),
-                Number(next.lat),
-                Number(next.lng),
-              );
-
-            if (extra < bestExtraDistance) {
-              bestExtraDistance = extra;
-              insertIndex = i + 1;
-            }
-          }
-        }
-
-        if (stops.length === 1) {
-          insertIndex = 1;
-        }
-
-        const newOrder = insertIndex + 1;
-        const updates = stops
-          .filter((stop) => stop.orden >= newOrder)
-          .map((stop) => ({ ...stop, orden: stop.orden + 1 }));
-
-        if (updates.length > 0) {
-          await stopRepo.save(updates);
-        }
-
-        const newStop = stopRepo.create({
-          routeId: route.id,
-          publicId: await generatePublicId(stopRepo, 'STP'),
-          lat: dto.pickupLat as number,
-          lng: dto.pickupLng as number,
-          direccion: pickupDireccion,
-          orden: newOrder,
-        });
-
-        await stopRepo.save(newStop);
-      }
-    });
-
-    if (!bookingId || !bookingPublicId || !otp) {
-      throw new BadRequestException(ErrorMessages.SYSTEM.INTERNAL_ERROR);
-    }
+    const { bookingId, bookingPublicId, otp, routeId: routeInternalId } = result;
 
     await this.auditService.logEvent({
       action: AuditAction.BOOKING_CREATED,
@@ -395,7 +445,7 @@ export class BookingsService {
       ],
     });
 
-    if (!booking || booking.passengerId !== passengerId) {
+    if (booking?.passengerId !== passengerId) {
       throw new NotFoundException(ErrorMessages.BOOKINGS.BOOKING_NOT_FOUND);
     }
 
@@ -418,7 +468,7 @@ export class BookingsService {
       relations: ['route'],
     });
 
-    if (!booking || booking.passengerId !== passengerId) {
+    if (booking?.passengerId !== passengerId) {
       throw new NotFoundException(ErrorMessages.BOOKINGS.BOOKING_NOT_FOUND);
     }
 
@@ -510,7 +560,7 @@ export class BookingsService {
       where: buildIdWhere<Booking>(bookingId),
     });
 
-    if (!booking || booking.passengerId !== passengerId) {
+    if (booking?.passengerId !== passengerId) {
       throw new NotFoundException(ErrorMessages.BOOKINGS.BOOKING_NOT_FOUND);
     }
 

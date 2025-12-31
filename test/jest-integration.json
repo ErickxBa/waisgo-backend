@@ -12,6 +12,14 @@
   },
   "testEnvironment": "node",
   "setupFilesAfterEnv": ["<rootDir>/test/setup-integration.ts"],
+  "collectCoverageFrom": [
+    "<rootDir>/src/**/*.(t|j)s",
+    "!<rootDir>/src/**/Dto/**",
+    "!<rootDir>/src/**/Enums/**",
+    "!<rootDir>/src/**/Models/**",
+    "!<rootDir>/src/migrations/**",
+    "!<rootDir>/src/**/types/**"
+  ],
   "moduleNameMapper": {
     "^src/(.*)$": "<rootDir>/src/$1"
   },

@@ -9,7 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import { URLSearchParams } from 'url';
+import { URLSearchParams } from 'node:url';
 
 import { Payment } from './Models/payment.entity';
 import { CreatePaymentDto } from './Dto';
@@ -140,9 +140,10 @@ export class PaymentsService {
       idempotencyKey || undefined,
     );
     if (normalizedKey) {
-      const cached = await this.idempotencyService.get<
-        { message: string; paymentId?: string }
-      >('payments:create', passengerId, normalizedKey);
+      const cached = await this.idempotencyService.get<{
+        message: string;
+        paymentId?: string;
+      }>('payments:create', passengerId, normalizedKey);
       if (cached) {
         return cached;
       }
@@ -166,7 +167,9 @@ export class PaymentsService {
     }
 
     if (booking.metodoPago !== dto.method) {
-      throw new BadRequestException(ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD);
+      throw new BadRequestException(
+        ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD,
+      );
     }
 
     const existingPayment = await this.paymentRepository.findOne({
@@ -174,7 +177,9 @@ export class PaymentsService {
     });
 
     if (existingPayment) {
-      throw new ConflictException(ErrorMessages.PAYMENTS.PAYMENT_ALREADY_EXISTS);
+      throw new ConflictException(
+        ErrorMessages.PAYMENTS.PAYMENT_ALREADY_EXISTS,
+      );
     }
 
     const amount = this.getBookingAmount(booking);
@@ -234,7 +239,9 @@ export class PaymentsService {
 
     if (status) {
       if (!Object.values(EstadoPagoEnum).includes(status as EstadoPagoEnum)) {
-        throw new BadRequestException(ErrorMessages.VALIDATION.INVALID_FORMAT('status'));
+        throw new BadRequestException(
+          ErrorMessages.VALIDATION.INVALID_FORMAT('status'),
+        );
       }
       query.andWhere('payment.status = :status', { status });
     }
@@ -256,7 +263,7 @@ export class PaymentsService {
       relations: ['booking', 'booking.route'],
     });
 
-    if (!payment || payment.booking.passengerId !== passengerId) {
+    if (payment?.booking?.passengerId !== passengerId) {
       throw new NotFoundException(ErrorMessages.PAYMENTS.PAYMENT_NOT_FOUND);
     }
 
@@ -276,7 +283,9 @@ export class PaymentsService {
     approvalUrl?: string;
     paypalOrderId?: string;
   }> {
-    const normalizedKey = this.idempotencyService.normalizeKey(idempotencyKey || undefined);
+    const normalizedKey = this.idempotencyService.normalizeKey(
+      idempotencyKey || undefined,
+    );
     if (normalizedKey) {
       const cached = await this.idempotencyService.get<{
         message: string;
@@ -293,7 +302,7 @@ export class PaymentsService {
       relations: ['booking'],
     });
 
-    if (!payment || payment.booking.passengerId !== passengerId) {
+    if (payment?.booking?.passengerId !== passengerId) {
       throw new NotFoundException(ErrorMessages.PAYMENTS.PAYMENT_NOT_FOUND);
     }
 
@@ -301,7 +310,9 @@ export class PaymentsService {
       payment.method !== MetodoPagoEnum.PAYPAL &&
       payment.method !== MetodoPagoEnum.TARJETA
     ) {
-      throw new BadRequestException(ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD);
+      throw new BadRequestException(
+        ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD,
+      );
     }
 
     if (payment.status !== EstadoPagoEnum.PENDING) {
@@ -331,7 +342,9 @@ export class PaymentsService {
       },
     );
 
-    const approvalUrl = order.links?.find((link) => link.rel === 'approve')?.href;
+    const approvalUrl = order.links?.find(
+      (link) => link.rel === 'approve',
+    )?.href;
 
     if (!order.id || !approvalUrl) {
       throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
@@ -393,7 +406,7 @@ export class PaymentsService {
       relations: ['booking'],
     });
 
-    if (!payment || payment.booking.passengerId !== passengerId) {
+    if (payment?.booking?.passengerId !== passengerId) {
       throw new NotFoundException(ErrorMessages.SYSTEM.NOT_FOUND);
     }
 
@@ -401,7 +414,9 @@ export class PaymentsService {
       payment.method !== MetodoPagoEnum.PAYPAL &&
       payment.method !== MetodoPagoEnum.TARJETA
     ) {
-      throw new BadRequestException(ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD);
+      throw new BadRequestException(
+        ErrorMessages.PAYMENTS.INVALID_PAYMENT_METHOD,
+      );
     }
 
     if (!payment.paypalOrderId || payment.paypalOrderId !== paypalOrderId) {
@@ -431,7 +446,11 @@ export class PaymentsService {
       result: AuditResult.SUCCESS,
       ipAddress: context?.ip,
       userAgent: context?.userAgent,
-      metadata: { paymentId: payment.id, paypalOrderId, paypalCaptureId: captureId },
+      metadata: {
+        paymentId: payment.id,
+        paypalOrderId,
+        paypalCaptureId: captureId,
+      },
     });
 
     const response = {
@@ -471,7 +490,9 @@ export class PaymentsService {
 
     if (status) {
       if (!Object.values(EstadoPagoEnum).includes(status as EstadoPagoEnum)) {
-        throw new BadRequestException(ErrorMessages.VALIDATION.INVALID_FORMAT('status'));
+        throw new BadRequestException(
+          ErrorMessages.VALIDATION.INVALID_FORMAT('status'),
+        );
       }
       query.andWhere('payment.status = :status', { status });
     }
@@ -502,7 +523,9 @@ export class PaymentsService {
 
     if (status) {
       if (!Object.values(EstadoPagoEnum).includes(status as EstadoPagoEnum)) {
-        throw new BadRequestException(ErrorMessages.VALIDATION.INVALID_FORMAT('status'));
+        throw new BadRequestException(
+          ErrorMessages.VALIDATION.INVALID_FORMAT('status'),
+        );
       }
       query.andWhere('payment.status = :status', { status });
     }
@@ -517,7 +540,11 @@ export class PaymentsService {
   }
 
   private async refundPaypalCapture(captureId: string): Promise<void> {
-    await this.paypalRequest('POST', `/v2/payments/captures/${captureId}/refund`, {});
+    await this.paypalRequest(
+      'POST',
+      `/v2/payments/captures/${captureId}/refund`,
+      {},
+    );
   }
 
   async reversePayment(

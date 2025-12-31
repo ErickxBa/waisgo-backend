@@ -1,182 +1,89 @@
-import { Test } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
-import { DataSource } from 'typeorm';
-import { AppModule } from '../src/app.module';
-import { RedisService } from '../src/redis/redis.service';
-import { MailService } from '../src/modules/mail/mail.service';
-import { ResponseInterceptor } from '../src/modules/common/interceptors/response.interceptor';
-import { GlobalExceptionFilter } from '../src/modules/common/filters/global-exception.filter';
-import { AuditService } from '../src/modules/audit/audit.service';
-import { ConfigService } from '@nestjs/config';
-import { InMemoryRedisService, NoopMailService } from './helpers/fakes';
 import { truncateAllTables } from './helpers/db';
-import { AuthUser } from '../src/modules/auth/Models/auth-user.entity';
-import { BusinessUser } from '../src/modules/business/Models/business-user.entity';
-import { Driver } from '../src/modules/drivers/Models/driver.entity';
-import { Vehicle } from '../src/modules/drivers/Models/vehicle.entity';
 import { Route } from '../src/modules/routes/Models/route.entity';
 import { Booking } from '../src/modules/bookings/Models/booking.entity';
-import { EstadoVerificacionEnum, RolUsuarioEnum } from '../src/modules/auth/Enum';
-import { EstadoConductorEnum } from '../src/modules/drivers/Enums/estado-conductor.enum';
+import { RolUsuarioEnum } from '../src/modules/auth/Enum';
 import { CampusOrigenEnum, EstadoRutaEnum } from '../src/modules/routes/Enums';
 import { EstadoReservaEnum } from '../src/modules/bookings/Enums';
 import { MetodoPagoEnum } from '../src/modules/payments/Enums';
-import { generatePublicId } from '../src/modules/common/utils/public-id.util';
+import { createTestApp, TestAppContext } from './helpers/app';
+import {
+  buildUserSeed,
+  loginUser,
+  registerAndVerifyUser,
+  registerUser,
+  setUserRole,
+} from './helpers/auth';
+import { createDriver, createVehicle, getBusinessUserByEmail } from './helpers/fixtures';
 
 const hasTestDb = Boolean(process.env.TEST_DB_HOST);
 const describeFlow = hasTestDb ? describe : describe.skip;
 
 describeFlow('Routes + Bookings + OTP + Ratings (e2e)', () => {
-  let app: INestApplication;
-  let dataSource: DataSource;
-  let redis: InMemoryRedisService;
+  let ctx: TestAppContext;
 
   beforeAll(async () => {
-    redis = new InMemoryRedisService();
-
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(RedisService)
-      .useValue(redis)
-      .overrideProvider(MailService)
-      .useValue(new NoopMailService())
-      .compile();
-
-    app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api');
-    app.useGlobalInterceptors(new ResponseInterceptor());
-    app.useGlobalFilters(
-      new GlobalExceptionFilter(
-        app.get(AuditService),
-        app.get(ConfigService),
-      ),
-    );
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
-
-    await app.init();
-    dataSource = app.get(DataSource);
+    ctx = await createTestApp();
   });
 
   afterAll(async () => {
-    await app.close();
+    await ctx.app.close();
   });
 
   beforeEach(async () => {
-    await truncateAllTables(dataSource);
+    await truncateAllTables(ctx.dataSource);
+    ctx.redis.clear();
   });
 
   it('creates route, books, verifies OTP, completes, and rates', async () => {
-    const password = 'Segura.123';
-    const suffix = Date.now().toString().slice(-6);
-    const passengerEmail = `ps${suffix}@epn.edu.ec`;
-    const driverEmail = `dr${suffix}@epn.edu.ec`;
-
-    await request(app.getHttpServer())
-      .post('/api/auth/register')
-      .send({
-        email: passengerEmail,
-        password,
-        nombre: 'Carlos',
-        apellido: 'Perez',
-        celular: '0987654321',
-      })
-      .expect(201);
-
-    const passengerLogin = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email: passengerEmail, password })
-      .expect(200);
-
-    const passengerUserToken = passengerLogin.body?.data?.token as string;
-
-    await request(app.getHttpServer())
-      .post('/api/verification/send')
-      .set('Authorization', `Bearer ${passengerUserToken}`)
-      .expect(200);
-
-    const authRepo = dataSource.getRepository(AuthUser);
-    const passengerAuth = await authRepo.findOne({
-      where: { email: passengerEmail },
+    const passengerSeed = buildUserSeed('ps', {
+      nombre: 'Carlos',
+      apellido: 'Perez',
+      celular: '0987654321',
     });
-    const otp = await redis.get(`otp:verify:${passengerAuth?.id ?? ''}`);
+    const driverSeed = buildUserSeed('dr', {
+      nombre: 'Andrea',
+      apellido: 'Lopez',
+      celular: '0981234567',
+    });
 
-    await request(app.getHttpServer())
-      .post('/api/verification/confirm')
-      .set('Authorization', `Bearer ${passengerUserToken}`)
-      .send({ code: otp })
-      .expect(200);
-
-    const passengerLoginVerified = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email: passengerEmail, password })
-      .expect(200);
-
-    const passengerToken = passengerLoginVerified.body?.data?.token as string;
-
-    await request(app.getHttpServer())
-      .post('/api/auth/register')
-      .send({
-        email: driverEmail,
-        password,
-        nombre: 'Andrea',
-        apellido: 'Lopez',
-        celular: '0981234567',
-      })
-      .expect(201);
-
-    await authRepo.update(
-      { email: driverEmail },
-      {
-        rol: RolUsuarioEnum.CONDUCTOR,
-        estadoVerificacion: EstadoVerificacionEnum.VERIFICADO,
-      },
+    const { token: passengerToken } = await registerAndVerifyUser(
+      ctx.app,
+      ctx.dataSource,
+      ctx.redis,
+      passengerSeed,
     );
 
-    const driverLogin = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email: driverEmail, password })
-      .expect(200);
+    await registerUser(ctx.app, driverSeed);
+    await setUserRole(
+      ctx.dataSource,
+      driverSeed.email,
+      RolUsuarioEnum.CONDUCTOR,
+      true,
+    );
 
-    const driverToken = driverLogin.body?.data?.token as string;
+    const driverToken = await loginUser(
+      ctx.app,
+      driverSeed.email,
+      driverSeed.password,
+    );
 
-    const businessRepo = dataSource.getRepository(BusinessUser);
-    const driverBusiness = await businessRepo.findOne({
-      where: { email: driverEmail },
-    });
+    const driverBusiness = await getBusinessUserByEmail(
+      ctx.dataSource,
+      driverSeed.email,
+    );
 
-    const driverRepo = dataSource.getRepository(Driver);
-    const vehicleRepo = dataSource.getRepository(Vehicle);
-
-    const driver = driverRepo.create({
-      publicId: await generatePublicId(driverRepo, 'DRV'),
+    const driver = await createDriver(ctx.dataSource, {
       userId: driverBusiness?.id as string,
       paypalEmail: 'driver@epn.edu.ec',
-      estado: EstadoConductorEnum.APROBADO,
-      fechaAprobacion: new Date(),
     });
-    await driverRepo.save(driver);
 
-    const vehicle = vehicleRepo.create({
-      publicId: await generatePublicId(vehicleRepo, 'VEH'),
+    await createVehicle(ctx.dataSource, {
       driverId: driver.id,
-      marca: 'Toyota',
-      modelo: 'Yaris',
-      color: 'Azul',
       placa: `P${Date.now().toString().slice(-6)}`,
-      asientosDisponibles: 4,
-      isActivo: true,
     });
-    await vehicleRepo.save(vehicle);
 
-    const routeRes = await request(app.getHttpServer())
+    const routeRes = await request(ctx.app.getHttpServer())
       .post('/api/routes')
       .set('Authorization', `Bearer ${driverToken}`)
       .send({
@@ -195,7 +102,7 @@ describeFlow('Routes + Bookings + OTP + Ratings (e2e)', () => {
     const routeId = routeRes.body?.data?.routeId as string;
     expect(routeId).toBeDefined();
 
-    const bookingRes = await request(app.getHttpServer())
+    const bookingRes = await request(ctx.app.getHttpServer())
       .post('/api/bookings')
       .set('Authorization', `Bearer ${passengerToken}`)
       .send({ routeId, metodoPago: MetodoPagoEnum.EFECTIVO })
@@ -206,19 +113,19 @@ describeFlow('Routes + Bookings + OTP + Ratings (e2e)', () => {
     expect(bookingId).toBeDefined();
     expect(otpValue).toBeDefined();
 
-    await request(app.getHttpServer())
+    await request(ctx.app.getHttpServer())
       .post(`/api/bookings/${bookingId}/verify-otp`)
       .set('Authorization', `Bearer ${driverToken}`)
       .send({ otp: otpValue })
       .expect(200);
 
-    await request(app.getHttpServer())
+    await request(ctx.app.getHttpServer())
       .patch(`/api/bookings/${bookingId}/complete`)
       .set('Authorization', `Bearer ${driverToken}`)
       .expect(200);
 
-    const bookingRepo = dataSource.getRepository(Booking);
-    const routeRepo = dataSource.getRepository(Route);
+    const bookingRepo = ctx.dataSource.getRepository(Booking);
+    const routeRepo = ctx.dataSource.getRepository(Route);
 
     const booking = await bookingRepo.findOne({
       where: { publicId: bookingId },
@@ -228,7 +135,7 @@ describeFlow('Routes + Bookings + OTP + Ratings (e2e)', () => {
     const route = await routeRepo.findOne({ where: { publicId: routeId } });
     expect(route?.estado).toBe(EstadoRutaEnum.FINALIZADA);
 
-    const ratingRes = await request(app.getHttpServer())
+    const ratingRes = await request(ctx.app.getHttpServer())
       .post('/api/ratings')
       .set('Authorization', `Bearer ${passengerToken}`)
       .send({
@@ -241,28 +148,28 @@ describeFlow('Routes + Bookings + OTP + Ratings (e2e)', () => {
 
     expect(ratingRes.body?.data?.ratingId).toBeDefined();
 
-    const ratingsReceived = await request(app.getHttpServer())
+    const ratingsReceived = await request(ctx.app.getHttpServer())
       .get('/api/ratings/my')
       .set('Authorization', `Bearer ${driverToken}`)
       .expect(200);
 
     expect(ratingsReceived.body?.data?.total).toBe(1);
 
-    const ratingsGiven = await request(app.getHttpServer())
+    const ratingsGiven = await request(ctx.app.getHttpServer())
       .get('/api/ratings/given')
       .set('Authorization', `Bearer ${passengerToken}`)
       .expect(200);
 
     expect(ratingsGiven.body?.data?.total).toBe(1);
 
-    const summaryRes = await request(app.getHttpServer())
+    const summaryRes = await request(ctx.app.getHttpServer())
       .get('/api/ratings/summary')
       .set('Authorization', `Bearer ${driverToken}`)
       .expect(200);
 
     expect(summaryRes.body?.data?.average).toBeGreaterThan(0);
 
-    const canRateRes = await request(app.getHttpServer())
+    const canRateRes = await request(ctx.app.getHttpServer())
       .get(`/api/ratings/can-rate/${routeId}`)
       .set('Authorization', `Bearer ${passengerToken}`)
       .expect(200);

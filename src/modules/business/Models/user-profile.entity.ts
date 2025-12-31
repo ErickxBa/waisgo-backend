@@ -36,7 +36,7 @@ export class UserProfile {
   @Column({ type: 'text', nullable: true })
   fotoPerfilUrl: string | null;
 
-  @Column({ type: 'decimal', precision: 3, scale: 2, default: 5.0 })
+  @Column({ type: 'decimal', precision: 3, scale: 2, default: 5 })
   ratingPromedio: number;
 
   @Column({ type: 'int', default: 0 })
