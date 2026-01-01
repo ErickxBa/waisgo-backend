@@ -92,6 +92,37 @@ export class VerificationController {
     };
   }
 
+  /**
+   * Endpoint PÚBLICO para enviar código durante el registro
+   * Se usa cuando el usuario aún no está autenticado
+   */
+  @Public()
+  @Post('send/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enviar código de verificación durante registro (público)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Código de verificación enviado al correo.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Usuario no encontrado o ya verificado.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado.',
+  })
+  async sendPublic(@Param('userId') userId: string, @Req() req: Request) {
+    const context = this.getAuthContext(req);
+    const safeUserId = await this.validateUserId(userId);
+    await this.verificationService.sendVerification(safeUserId, context);
+
+    return {
+      success: true,
+      message: ErrorMessages.VERIFICATION.CODE_SENT,
+    };
+  }
+
   @Roles(RolUsuarioEnum.USER)
   @Post('confirm')
   @HttpCode(HttpStatus.OK)
@@ -127,6 +158,46 @@ export class VerificationController {
 
     const context = this.getAuthContext(req);
     const safeUserId = await this.validateUserId(user.id);
+    await this.verificationService.confirmVerification(
+      safeUserId,
+      dto.code,
+      context,
+    );
+
+    return {
+      success: true,
+      message: ErrorMessages.VERIFICATION.VERIFICATION_SUCCESS,
+    };
+  }
+
+  /**
+   * Endpoint PÚBLICO para confirmar código durante el registro
+   * Se usa cuando el usuario aún no está autenticado
+   */
+  @Public()
+  @Post('confirm/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirmar código de verificación durante registro (público)' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Cuenta verificada exitosamente. El usuario ahora tiene rol PASAJERO.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Usuario ya verificado, código incorrecto o expirado.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado.',
+  })
+  async confirmPublic(
+    @Param('userId') userId: string,
+    @Body() dto: ConfirmOtpDto,
+    @Req() req: Request,
+  ) {
+    const context = this.getAuthContext(req);
+    const safeUserId = await this.validateUserId(userId);
     await this.verificationService.confirmVerification(
       safeUserId,
       dto.code,
