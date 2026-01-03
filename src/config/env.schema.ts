@@ -13,12 +13,19 @@ export const envSchema = Joi.object({
   DB_PASSWORD: Joi.string().min(3).required(),
   DB_NAME: Joi.string().min(3).required(),
   DB_SSL: Joi.boolean().default(false),
+  DB_SSL_CA: Joi.string().optional(),
 
   DB_MIGRATION_USERNAME: Joi.string().required(),
   DB_MIGRATION_PASSWORD: Joi.string().required(),
 
   JWT_SECRET: Joi.string().length(32).required(),
   JWT_EXPIRES_IN: Joi.string().default('8h'),
+  OTP_SECRET: Joi.string().length(32).optional(),
+
+  SWAGGER_ENABLED: Joi.boolean().optional(),
+  SEED_ENABLED: Joi.boolean().optional(),
+
+  TRUST_PROXY: Joi.boolean().default(false),
 
   PAYPAL_CLIENT_ID: Joi.string().required(),
   PAYPAL_SECRET: Joi.string().required(),
@@ -39,7 +46,7 @@ export const envSchema = Joi.object({
   THROTTLE_TTL: Joi.number().min(1000).default(60000),
   THROTTLE_LIMIT: Joi.number().min(1).default(100),
 
-  CLEANUP_UNVERIFIED_DAYS: Joi.number().min(1).max(30).default(7),
+  CLEANUP_UNVERIFIED_DAYS: Joi.number().min(1).max(30).default(3),
 
   // OTP Configuration
   OTP_EXPIRATION_MINUTES: Joi.number().min(1).max(60).default(15),

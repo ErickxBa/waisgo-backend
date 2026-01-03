@@ -15,6 +15,7 @@ import { EstadoPagoEnum, MetodoPagoEnum } from './Enums';
 import { PaypalClientService } from './paypal-client.service';
 import { Booking } from '../bookings/Models/booking.entity';
 import { Driver } from '../drivers/Models/driver.entity';
+import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 import { EstadoReservaEnum } from '../bookings/Enums';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
@@ -22,6 +23,7 @@ import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
 import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { StructuredLogger, SecurityEventType } from '../common/logger';
 
 type PaypalOrderResponse = {
   id?: string;
@@ -32,6 +34,10 @@ type PaypalOrderResponse = {
       captures?: Array<{
         id?: string;
         status?: string;
+        amount?: {
+          value?: string;
+          currency_code?: string;
+        };
       }>;
     };
   }>;
@@ -50,6 +56,7 @@ export class PaymentsService {
     private readonly configService: ConfigService,
     private readonly paypalClient: PaypalClientService,
     private readonly idempotencyService: IdempotencyService,
+    private readonly structuredLogger: StructuredLogger,
   ) {}
 
   private paypalRequest<T>(
@@ -151,6 +158,19 @@ export class PaymentsService {
         amount,
       },
     });
+
+    this.structuredLogger.logSuccess(
+      SecurityEventType.PAYMENT_CREATE,
+      'Payment creation',
+      passengerId,
+      `payment:${savedPayment.publicId}`,
+      {
+        bookingId: booking.publicId,
+        method: dto.method,
+        amount,
+        currency: 'USD',
+      },
+    );
 
     const response = {
       message: ErrorMessages.PAYMENTS.PAYMENT_INITIATED,
@@ -375,8 +395,30 @@ export class PaymentsService {
       throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
     }
 
-    const captureId =
-      capture.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? null;
+    const captureDetails =
+      capture.purchase_units?.[0]?.payments?.captures?.[0] ?? null;
+    const captureId = captureDetails?.id ?? null;
+    const captureAmount = captureDetails?.amount?.value ?? null;
+    const captureCurrency = captureDetails?.amount?.currency_code ?? null;
+
+    const expectedAmount = Number(payment.amount).toFixed(2);
+
+    if (!captureAmount || !captureCurrency) {
+      payment.status = EstadoPagoEnum.FAILED;
+      payment.failureReason = 'Missing PayPal capture details';
+      await this.paymentRepository.save(payment);
+      throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
+    }
+
+    if (
+      captureCurrency !== payment.currency ||
+      Number(captureAmount).toFixed(2) !== expectedAmount
+    ) {
+      payment.status = EstadoPagoEnum.FAILED;
+      payment.failureReason = `Capture mismatch: ${captureAmount} ${captureCurrency}`;
+      await this.paymentRepository.save(payment);
+      throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
+    }
 
     payment.status = EstadoPagoEnum.PAID;
     payment.paidAt = new Date();
@@ -395,6 +437,19 @@ export class PaymentsService {
         paypalCaptureId: captureId,
       },
     });
+
+    this.structuredLogger.logSuccess(
+      SecurityEventType.PAYMENT_CAPTURE,
+      'PayPal payment capture',
+      passengerId,
+      `payment:${payment.publicId}`,
+      {
+        paypalOrderId,
+        captureId,
+        amount: payment.amount,
+        currency: payment.currency,
+      },
+    );
 
     const response = {
       message: ErrorMessages.PAYMENTS.PAYPAL_CAPTURED,
@@ -422,6 +477,10 @@ export class PaymentsService {
 
     if (!driver) {
       throw new NotFoundException(ErrorMessages.DRIVER.NOT_A_DRIVER);
+    }
+
+    if (driver.estado !== EstadoConductorEnum.APROBADO) {
+      throw new ForbiddenException(ErrorMessages.DRIVER.DRIVER_NOT_APPROVED);
     }
 
     const query = this.paymentRepository

@@ -12,6 +12,7 @@ import type { AuthContext } from '../common/types';
 import { Route } from '../routes/Models/route.entity';
 import { Booking } from './Models/booking.entity';
 import { RouteStop } from '../routes/Models/route-stop.entity';
+import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 import * as routeTimeUtil from '../common/utils/route-time.util';
 import { AuditAction } from '../audit/Enums';
 import * as publicIdUtil from '../common/utils/public-id.util';
@@ -53,6 +54,15 @@ describe('BookingsService', () => {
   const auditService = {
     logEvent: jest.fn(),
   };
+  const configService = {
+    get: jest.fn(),
+  };
+  const structuredLogger = {
+    logSuccess: jest.fn(),
+    logFailure: jest.fn(),
+    logDenied: jest.fn(),
+    logCritical: jest.fn(),
+  };
 
   const context: AuthContext = { ip: '127.0.0.1', userAgent: 'jest' };
 
@@ -60,6 +70,12 @@ describe('BookingsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    configService.get.mockImplementation((key: string) => {
+      if (key === 'OTP_SECRET' || key === 'JWT_SECRET') {
+        return '12345678901234567890123456789012';
+      }
+      return undefined;
+    });
     bookingRepository.manager.transaction.mockImplementation(async (work) =>
       work({} as never),
     );
@@ -72,6 +88,8 @@ describe('BookingsService', () => {
       paymentRepository as never,
       paymentsService as never,
       auditService as never,
+      configService as never,
+      structuredLogger as never,
     );
   });
 
@@ -496,6 +514,7 @@ describe('BookingsService', () => {
   it('rejects invalid status filter on getMyBookings', async () => {
     const query = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -508,22 +527,79 @@ describe('BookingsService', () => {
     ).rejects.toThrow(ErrorMessages.VALIDATION.INVALID_FORMAT('estado'));
   });
 
-  it('rejects cancellation when too late', async () => {
+  it('hides OTP when the departure window has expired', async () => {
+    const departureSpy = jest
+      .spyOn(routeTimeUtil, 'getDepartureDate')
+      .mockReturnValue(new Date(Date.now() - 3 * 60 * 60 * 1000));
+
+    const query = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          id: 'booking-id',
+          estado: EstadoReservaEnum.COMPLETADA,
+          otp: '123456',
+          route: { fecha: '2025-01-01', horaSalida: '10:00' },
+        } as Booking,
+      ]),
+    };
+
+    bookingRepository.createQueryBuilder.mockReturnValue(query);
+
+    const result = await service.getMyBookings('passenger-id');
+
+    expect(result.data?.[0].otp).toBeUndefined();
+    departureSpy.mockRestore();
+  });
+
+  it('returns no refund when cancellation occurs within 1 hour of departure', async () => {
     bookingRepository.findOne.mockResolvedValue({
       id: 'booking-id',
       passengerId: 'passenger-id',
       estado: EstadoReservaEnum.CONFIRMADA,
       routeId: 'route-id',
-      route: { fecha: '2025-01-01', horaSalida: '10:00' },
+      route: { fecha: '2030-01-15', horaSalida: '10:00' },
     });
 
-    jest
+    const departureSpy = jest
       .spyOn(routeTimeUtil, 'getDepartureDate')
       .mockReturnValue(new Date(Date.now() + 30 * 60 * 1000));
 
-    await expect(
-      service.cancelBooking('passenger-id', 'BKG_123', context),
-    ).rejects.toThrow(ErrorMessages.BOOKINGS.CANCELLATION_TOO_LATE);
+    const bookingRepo = { update: jest.fn() };
+    const routeRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'route-id',
+        asientosDisponibles: 1,
+        asientosTotales: 2,
+      }),
+      save: jest.fn(),
+    };
+
+    bookingRepository.manager.transaction.mockImplementation(async (work) =>
+      work({
+        getRepository: jest.fn((entity) => {
+          if (entity === Booking) return bookingRepo;
+          if (entity === Route) return routeRepo;
+          return null;
+        }),
+      } as never),
+    );
+
+    const response = await service.cancelBooking(
+      'passenger-id',
+      'BKG_123',
+      context,
+    );
+
+    expect(response).toEqual({
+      message: ErrorMessages.BOOKINGS.NO_REFUND,
+    });
+
+    departureSpy.mockRestore();
   });
 
   it('cancels booking and marks pending payment failed', async () => {
@@ -585,15 +661,26 @@ describe('BookingsService', () => {
   });
 
   it('rejects invalid OTP and logs audit', async () => {
-    driverRepository.findOne.mockResolvedValue({ id: 'driver-id' });
-    bookingRepository.findOne.mockResolvedValue({
+    driverRepository.findOne.mockResolvedValue({
+      id: 'driver-id',
+      estado: EstadoConductorEnum.APROBADO,
+    });
+    const booking = {
       id: 'booking-id',
       routeId: 'route-id',
       route: { driverId: 'driver-id' },
       estado: EstadoReservaEnum.CONFIRMADA,
       otpUsado: false,
       otp: '123456',
-    });
+    };
+    const query = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(booking),
+    };
+    bookingRepository.createQueryBuilder.mockReturnValue(query);
 
     await expect(
       service.verifyOtp('driver-user', 'BKG_123', '999999', context),
@@ -607,7 +694,10 @@ describe('BookingsService', () => {
   });
 
   it('verifies OTP and logs success', async () => {
-    driverRepository.findOne.mockResolvedValue({ id: 'driver-id' });
+    driverRepository.findOne.mockResolvedValue({
+      id: 'driver-id',
+      estado: EstadoConductorEnum.APROBADO,
+    });
     const booking = {
       id: 'booking-id',
       routeId: 'route-id',
@@ -616,7 +706,14 @@ describe('BookingsService', () => {
       otpUsado: false,
       otp: '123456',
     };
-    bookingRepository.findOne.mockResolvedValue(booking);
+    const query = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(booking),
+    };
+    bookingRepository.createQueryBuilder.mockReturnValue(query);
     bookingRepository.save.mockResolvedValue(booking);
 
     const response = await service.verifyOtp(
@@ -689,7 +786,10 @@ describe('BookingsService', () => {
   });
 
   it('completes booking and finalizes route when ready', async () => {
-    driverRepository.findOne.mockResolvedValue({ id: 'driver-id' });
+    driverRepository.findOne.mockResolvedValue({
+      id: 'driver-id',
+      estado: EstadoConductorEnum.APROBADO,
+    });
     bookingRepository.findOne.mockResolvedValue({
       id: 'booking-id',
       routeId: 'route-id',

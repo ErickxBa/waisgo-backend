@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PayoutsService } from './payouts.service';
 import { EstadoPayoutEnum } from '../Enums';
 import { ErrorMessages } from '../../common/constants/error-messages.constant';
@@ -160,11 +157,10 @@ describe('PayoutsService', () => {
       .spyOn(publicIdUtil, 'generatePublicId')
       .mockResolvedValue('PYO_123');
 
-    const response = await service.generatePayouts(
-      '2025-01',
-      'admin-id',
-      { ip: '127.0.0.1', userAgent: 'jest' },
-    );
+    const response = await service.generatePayouts('2025-01', 'admin-id', {
+      ip: '127.0.0.1',
+      userAgent: 'jest',
+    });
 
     expect(response).toEqual({
       message: ErrorMessages.PAYOUTS.PAYOUTS_GENERATED,
@@ -209,6 +205,7 @@ describe('PayoutsService', () => {
       id: 'payout-id',
       status: EstadoPayoutEnum.PENDING,
       attempts: 0,
+      lastError: null,
     };
     payoutRepository.findOne.mockResolvedValue(payout);
     payoutRepository.save.mockResolvedValue(payout);
@@ -238,17 +235,17 @@ describe('PayoutsService', () => {
   it('rejects invalid status on getAllPayouts', async () => {
     payoutRepository.createQueryBuilder.mockReturnValue(buildQuery());
 
-    await expect(
-      service.getAllPayouts(1, 10, 'INVALID'),
-    ).rejects.toThrow(ErrorMessages.VALIDATION.INVALID_FORMAT('status'));
+    await expect(service.getAllPayouts(1, 10, 'INVALID')).rejects.toThrow(
+      ErrorMessages.VALIDATION.INVALID_FORMAT('status'),
+    );
   });
 
   it('throws when payout does not exist', async () => {
     payoutRepository.findOne.mockResolvedValue(null);
 
-    await expect(
-      service.executePaypalPayout('PYO_123'),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.executePaypalPayout('PYO_123')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('throws when payout is not pending', async () => {
@@ -259,9 +256,9 @@ describe('PayoutsService', () => {
       driver: { paypalEmail: 'driver@epn.edu.ec' },
     });
 
-    await expect(
-      service.executePaypalPayout('PYO_123'),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.executePaypalPayout('PYO_123')).rejects.toThrow(
+      BadRequestException,
+    );
   });
 
   it('throws when payout amount is below minimum', async () => {
@@ -272,9 +269,9 @@ describe('PayoutsService', () => {
       driver: { paypalEmail: 'driver@epn.edu.ec' },
     });
 
-    await expect(
-      service.executePaypalPayout('PYO_123'),
-    ).rejects.toThrow(ErrorMessages.PAYMENTS.MIN_WITHDRAWAL);
+    await expect(service.executePaypalPayout('PYO_123')).rejects.toThrow(
+      ErrorMessages.PAYMENTS.MIN_WITHDRAWAL,
+    );
   });
 
   it('throws when payout has no paypal email', async () => {
@@ -285,9 +282,9 @@ describe('PayoutsService', () => {
       driver: {},
     });
 
-    await expect(
-      service.executePaypalPayout('PYO_123'),
-    ).rejects.toThrow(ErrorMessages.PAYMENTS.INVALID_PAYPAL_ACCOUNT);
+    await expect(service.executePaypalPayout('PYO_123')).rejects.toThrow(
+      ErrorMessages.PAYMENTS.INVALID_PAYPAL_ACCOUNT,
+    );
   });
 
   it('updates payout on successful paypal execution', async () => {
@@ -327,9 +324,9 @@ describe('PayoutsService', () => {
     payoutRepository.findOne.mockResolvedValue(payout);
     paypalClient.request.mockRejectedValue(new Error('paypal-error'));
 
-    await expect(
-      service.executePaypalPayout('PYO_123'),
-    ).rejects.toThrow(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
+    await expect(service.executePaypalPayout('PYO_123')).rejects.toThrow(
+      ErrorMessages.PAYMENTS.PAYMENT_FAILED,
+    );
 
     expect(payout.status).toBe(EstadoPayoutEnum.FAILED);
     expect(payoutRepository.save).toHaveBeenCalled();

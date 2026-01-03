@@ -14,9 +14,11 @@ import { EncryptJWT } from 'jose';
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { StructuredLogger, SecurityEventType } from '../common/logger';
 
 import { EstadoVerificacionEnum, RolUsuarioEnum } from './Enum';
 import { AuditAction, AuditResult } from '../audit/Enums';
+import { parseDurationToSeconds } from '../common/utils/duration.util';
 
 import { LoginDto, RegisterUserDto } from './Dto';
 import { AuthContext } from '../common/types';
@@ -41,13 +43,13 @@ export class AuthService {
   private readonly RESET_TTL_SECONDS: number;
   private readonly RESET_PREFIX = 'reset:token:';
   private readonly REVOKE_PREFIX = 'revoke:jti:';
-  private readonly REVOKE_USER_PREFIX = 'revoke:user:';
 
   // NUEVAS CONSTANTES PARA LIMITE Y LINK ÚNICO
   private readonly RESET_LIMIT_PREFIX = 'reset:limit:';
   private readonly RESET_ACTIVE_PREFIX = 'reset:active:';
   private readonly MAX_RESET_ATTEMPTS: number;
   private readonly RESET_LIMIT_TTL = 60 * 60;
+  private readonly DEFAULT_REVOKE_TTL_SECONDS = 8 * 60 * 60;
 
   constructor(
     @InjectRepository(AuthUser)
@@ -58,6 +60,7 @@ export class AuthService {
     private readonly auditService: AuditService,
     private readonly redisService: RedisService,
     private readonly mailService: MailService,
+    private readonly structuredLogger: StructuredLogger,
   ) {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
     this.JWT_EXPIRES_IN =
@@ -82,7 +85,7 @@ export class AuthService {
   }
 
   async register(dto: RegisterUserDto, context?: AuthContext) {
-    const { password, nombre, apellido, celular, email } = dto;
+    const { password, confirmPassword, nombre, apellido, celular, email } = dto;
     const normalizedEmail = email.toLowerCase().trim();
 
     const existingUser = await this.authUserRepo.findOne({
@@ -98,6 +101,12 @@ export class AuthService {
     await queryRunner.startTransaction();
 
     try {
+      if (password !== confirmPassword) {
+        throw new BadRequestException(
+          ErrorMessages.AUTH.PASSWORDS_DO_NOT_MATCH,
+        );
+      }
+
       const userId = randomUUID();
 
       const authUser = this.authUserRepo.create({
@@ -136,6 +145,14 @@ export class AuthService {
         metadata: { email: normalizedEmail },
       });
 
+      this.structuredLogger.logSuccess(
+        SecurityEventType.REGISTER,
+        'User registration',
+        userId,
+        `user:${userId}`,
+        { email: normalizedEmail, alias: businessIdentity.alias },
+      );
+
       this.logger.log(`User registered: ${userId}`);
 
       return {
@@ -145,6 +162,14 @@ export class AuthService {
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      this.structuredLogger.logFailure(
+        SecurityEventType.REGISTER,
+        'User registration',
+        error instanceof Error ? error.message : 'Unknown error',
+        undefined,
+        undefined,
+        error instanceof Error ? error.name : 'ERROR',
+      );
       this.logger.error('Registration failed', error);
       throw error;
     } finally {
@@ -162,6 +187,15 @@ export class AuthService {
       });
 
       if (!user?.credential) {
+        this.structuredLogger.logFailure(
+          SecurityEventType.LOGIN_FAILURE,
+          'User login',
+          'Invalid credentials',
+          undefined,
+          `user:${email}`,
+          'INVALID_CREDENTIALS',
+          { email, ip: context?.ip },
+        );
         this.logger.warn(`Intento de login fallido para email: ${email}`);
         throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
       }
@@ -215,6 +249,14 @@ export class AuthService {
         userAgent: context?.userAgent,
         result: AuditResult.SUCCESS,
       });
+
+      this.structuredLogger.logSuccess(
+        SecurityEventType.LOGIN_SUCCESS,
+        'User login',
+        user.id,
+        `user:${user.id}`,
+        { email: user.email, role: user.rol, ip: context?.ip },
+      );
 
       return {
         token,
@@ -347,12 +389,9 @@ export class AuthService {
     await this.redisService.del(redisKey);
     await this.redisService.del(`${this.RESET_ACTIVE_PREFIX}${user.id}`);
 
-    const nowInSeconds = Math.floor(Date.now() / 1000);
-
-    await this.redisService.set(
-      `${this.REVOKE_USER_PREFIX}${user.id}`,
-      nowInSeconds,
-      28800,
+    await this.redisService.revokeUserSessions(
+      user.id,
+      this.getSessionRevokeTtlSeconds(),
     );
 
     // Auditar reset completado
@@ -437,6 +476,10 @@ export class AuthService {
 
     user.credential.passwordHash = await bcrypt.hash(newPass, 12);
     await this.authUserRepo.save(user);
+    await this.redisService.revokeUserSessions(
+      user.id,
+      this.getSessionRevokeTtlSeconds(),
+    );
 
     // Auditar cambio exitoso
     await this.auditService.logEvent({
@@ -484,6 +527,13 @@ export class AuthService {
     count++;
 
     await this.redisService.set(key, count, this.RESET_LIMIT_TTL);
+  }
+
+  private getSessionRevokeTtlSeconds(): number {
+    return parseDurationToSeconds(
+      this.JWT_EXPIRES_IN,
+      this.DEFAULT_REVOKE_TTL_SECONDS,
+    );
   }
 
   async findForVerification(userId: string) {

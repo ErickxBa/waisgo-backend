@@ -11,6 +11,7 @@ import { AuthUser } from './Models/auth-user.entity';
 import { Credential } from './Models/credential.entity';
 import { CleanupUnverifiedUsersJob } from './Jobs/cleanup-unverifield-users.jobs';
 import { BusinessModule } from '../business/business.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   exports: [AuthService],
@@ -32,6 +33,7 @@ import { BusinessModule } from '../business/business.module';
     AuditModule,
     MailModule,
     BusinessModule,
+    CommonModule,
   ],
 })
 export class AuthModule {}

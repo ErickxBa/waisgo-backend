@@ -43,8 +43,6 @@ Thumbs.db
 .env
 .env.*
 !.env.template
-!.env.test.template
-!.env.docker.template
 
 # Temp files
 *.swp

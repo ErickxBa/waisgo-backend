@@ -31,6 +31,8 @@ import { DriversService } from './drivers.service';
 import { ApplyDriverDto } from './Dto';
 import { TipoDocumentoEnum } from './Enums';
 
+const DRIVER_DOCUMENT_MAX_SIZE = 2 * 1024 * 1024;
+
 @ApiTags('Drivers')
 @ApiBearerAuth('access-token')
 @Controller('drivers')
@@ -79,7 +81,11 @@ export class DriversController {
 
   @Roles(RolUsuarioEnum.PASAJERO, RolUsuarioEnum.CONDUCTOR)
   @Post('documents/:tipo')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: DRIVER_DOCUMENT_MAX_SIZE },
+    }),
+  )
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Subir documento del conductor' })
   @ApiConsumes('multipart/form-data')

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,43 +6,39 @@ services:
     security_opt:
       - no-new-privileges:true
     env_file:
-      - .env.docker
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      - .env
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # Solo accesible desde localhost
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER"']
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
-    image: redis:7
+    image: redis:7-alpine  # Alpine es más ligero
     container_name: wasigo-redis
     restart: unless-stopped
     env_file:
-      - .env.docker
+      - .env
     security_opt:
       - no-new-privileges:true
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}  
     command: >
       redis-server
-      --requirepass ${REDIS_PASSWORD}
+      --requirepass $REDIS_PASSWORD
       --protected-mode yes
       --rename-command FLUSHALL ""
       --rename-command FLUSHDB ""
-      --rename-command CONFIG ""  
+      --rename-command CONFIG ""
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"  # Solo accesible desde localhost
+    volumes:
+      - redis_data:/data  # Persistencia de Redis
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,19 +48,23 @@ services:
     container_name: wasigo-minio
     restart: unless-stopped
     env_file:
-      - .env.docker
+      - .env
     security_opt:
       - no-new-privileges:true
     command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      - "9000:9000"  # API S3
-      - "9091:9001"  # Console
+      - "127.0.0.1:9000:9000"  # API S3 - Solo localhost
+      - "127.0.0.1:9091:9001"  # Console - Solo localhost
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'mc ready local || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:
+  redis_data:
   minio_data:

@@ -98,6 +98,11 @@ export class InMemoryRedisService {
     const revokedTimestamp = Number.parseInt(revokedAt, 10);
     return tokenIssuedAt < revokedTimestamp;
   }
+
+  async revokeUserSessions(userId: string, ttlSeconds: number): Promise<void> {
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    await this.set(`revoke:user:${userId}`, nowInSeconds, ttlSeconds);
+  }
 }
 
 export class NoopMailService {

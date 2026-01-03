@@ -1,18 +1,9 @@
 import { DataSource } from 'typeorm';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
 
 const envPath = path.join(process.cwd(), '.env');
 dotenv.config({ path: envPath });
-
-const testEnvPath =
-  process.env.TEST_ENV_FILE || path.join(process.cwd(), '.env.test');
-const shouldUseTestEnv =
-  process.env.NODE_ENV === 'test' || Boolean(process.env.TEST_DB_HOST);
-if (shouldUseTestEnv && fs.existsSync(testEnvPath)) {
-  dotenv.config({ path: testEnvPath, override: true });
-}
 
 const isTestEnv = process.env.NODE_ENV === 'test';
 
@@ -29,6 +20,7 @@ const DB_NAME = resolveVar('DB_NAME', 'TEST_DB_NAME');
 const DB_USERNAME = resolveVar('DB_USERNAME', 'TEST_DB_USERNAME');
 const DB_PASSWORD = resolveVar('DB_PASSWORD', 'TEST_DB_PASSWORD');
 const DB_SSL = resolveVar('DB_SSL', 'TEST_DB_SSL');
+const DB_SSL_CA = resolveVar('DB_SSL_CA', 'TEST_DB_SSL_CA');
 const DB_MIGRATION_USERNAME =
   (isTestEnv ? process.env.TEST_DB_MIGRATION_USERNAME : undefined) ||
   process.env.DB_MIGRATION_USERNAME ||
@@ -69,6 +61,15 @@ if (DB_MIGRATION_USERNAME === DB_USERNAME) {
 }
 
 const isSslEnabled = DB_SSL === 'true';
+const normalizedCa = DB_SSL_CA
+  ? DB_SSL_CA.replaceAll(String.raw`\n`, '\n')
+  : undefined;
+const sslConfig = isSslEnabled
+  ? {
+      rejectUnauthorized: true,
+      ...(normalizedCa ? { ca: normalizedCa } : {}),
+    }
+  : false;
 
 console.log(`[migration] Conectando como ${DB_MIGRATION_USERNAME}...`);
 if (isTestEnv) {
@@ -87,7 +88,7 @@ export const AppDataSource = new DataSource({
   migrations: [path.join(__dirname, 'src', 'migrations', '*.{ts,js}')],
   synchronize: false,
   logging: ['error', 'schema'],
-  ssl: isSslEnabled ? { rejectUnauthorized: false } : false,
+  ssl: sslConfig,
   extra: {
     max: 5,
     connectionTimeoutMillis: 10000,

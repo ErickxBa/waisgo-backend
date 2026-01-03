@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { Driver } from '../drivers/Models/driver.entity';
 import { DriverDocument } from '../drivers/Models/driver-document.entity';
+import { Vehicle } from '../drivers/Models/vehicle.entity';
 import { AuthUser } from '../auth/Models/auth-user.entity';
 import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 import { EstadoDocumentoEnum } from '../drivers/Enums/estado-documento.enum';
@@ -18,9 +19,13 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import { MailService } from '../mail/mail.service';
 import { StorageService } from '../storage/storage.service';
+import { BusinessService } from '../business/business.service';
 import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { buildIdWhere } from '../common/utils/public-id.util';
+import { parseDurationToSeconds } from '../common/utils/duration.util';
+import { RedisService } from 'src/redis/redis.service';
+import { StructuredLogger, SecurityEventType } from '../common/logger';
 
 export interface DocumentWithSignedUrl {
   id: string;
@@ -56,12 +61,15 @@ export interface DriverDetailResponse {
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
+  private readonly DEFAULT_REVOKE_TTL_SECONDS = 8 * 60 * 60;
 
   constructor(
     @InjectRepository(Driver)
     private readonly driverRepo: Repository<Driver>,
     @InjectRepository(DriverDocument)
     private readonly documentRepo: Repository<DriverDocument>,
+    @InjectRepository(Vehicle)
+    private readonly vehicleRepo: Repository<Vehicle>,
     @InjectRepository(AuthUser)
     private readonly authUserRepo: Repository<AuthUser>,
     private readonly dataSource: DataSource,
@@ -69,6 +77,9 @@ export class AdminService {
     private readonly mailService: MailService,
     private readonly storageService: StorageService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
+    private readonly businessService: BusinessService,
+    private readonly structuredLogger: StructuredLogger,
   ) {}
 
   /**
@@ -245,6 +256,13 @@ export class AdminService {
 
       await queryRunner.commitTransaction();
 
+      await this.businessService.updateAlias(driver.userId, 'Conductor');
+
+      await this.redisService.revokeUserSessions(
+        driver.userId,
+        this.getSessionRevokeTtlSeconds(),
+      );
+
       await this.auditService.logEvent({
         action: AuditAction.DRIVER_APPLICATION_APPROVED,
         userId: adminUserId,
@@ -256,6 +274,14 @@ export class AdminService {
 
       // Enviar notificación al conductor
       await this.notifyDriverApproved(driver, authUser);
+
+      this.structuredLogger.logSuccess(
+        SecurityEventType.DRIVER_APPROVE,
+        'Driver approval',
+        adminUserId,
+        `driver:${driver.publicId}`,
+        { driverId, driverUserId: driver.userId },
+      );
 
       this.logger.log(`Driver approved: ${driverId} by admin ${adminUserId}`);
 
@@ -317,6 +343,14 @@ export class AdminService {
     // Enviar notificación al conductor
     await this.notifyDriverRejected(driver, motivo.trim());
 
+    this.structuredLogger.logSuccess(
+      SecurityEventType.DRIVER_REJECT,
+      'Driver rejection',
+      adminUserId,
+      `driver:${driver.publicId}`,
+      { driverId, motivo: motivo.substring(0, 50) },
+    );
+
     this.logger.log(`Driver rejected: ${driverId} by admin ${adminUserId}`);
 
     return {
@@ -340,7 +374,11 @@ export class AdminService {
       throw new NotFoundException(ErrorMessages.DRIVER.DRIVER_NOT_FOUND);
     }
 
-    if (driver.estado !== EstadoConductorEnum.APROBADO) {
+    const suspendableStates = [
+      EstadoConductorEnum.APROBADO,
+      EstadoConductorEnum.PENDIENTE,
+    ];
+    if (!suspendableStates.includes(driver.estado)) {
       throw new BadRequestException(
         ErrorMessages.ADMIN.ONLY_APPROVED_CAN_SUSPEND,
       );
@@ -348,6 +386,13 @@ export class AdminService {
 
     driver.estado = EstadoConductorEnum.SUSPENDIDO;
     await this.driverRepo.save(driver);
+
+    await this.businessService.updateAlias(driver.userId, 'Pasajero');
+
+    await this.redisService.revokeUserSessions(
+      driver.userId,
+      this.getSessionRevokeTtlSeconds(),
+    );
 
     await this.auditService.logEvent({
       action: AuditAction.ADMIN_USER_SUSPENSION,
@@ -357,6 +402,14 @@ export class AdminService {
       userAgent: context.userAgent,
       metadata: { driverId, driverUserId: driver.userId },
     });
+
+    this.structuredLogger.logSuccess(
+      SecurityEventType.DRIVER_SUSPEND,
+      'Driver suspension',
+      adminUserId,
+      `driver:${driver.publicId}`,
+      { driverId, driverUserId: driver.userId },
+    );
 
     this.logger.log(`Driver suspended: ${driverId} by admin ${adminUserId}`);
 
@@ -497,5 +550,12 @@ export class AdminService {
         `Failed to send rejection notification: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
+  }
+
+  private getSessionRevokeTtlSeconds(): number {
+    return parseDurationToSeconds(
+      this.configService.get<string>('JWT_EXPIRES_IN'),
+      this.DEFAULT_REVOKE_TTL_SECONDS,
+    );
   }
 }

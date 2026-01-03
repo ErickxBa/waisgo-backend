@@ -6,6 +6,7 @@ import type { AuthContext } from '../common/types';
 import * as publicIdUtil from '../common/utils/public-id.util';
 
 describe('DriversService', () => {
+  const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const driverRepo = {
     findOne: jest.fn(),
     create: jest.fn(),
@@ -120,7 +121,7 @@ describe('DriversService', () => {
     const file = {
       size: 2 * 1024 * 1024 + 1,
       mimetype: 'image/png',
-      buffer: Buffer.from('x'),
+      buffer: pngBuffer,
     } as Express.Multer.File;
 
     await expect(
@@ -154,7 +155,7 @@ describe('DriversService', () => {
     const file = {
       size: 100,
       mimetype: 'image/png',
-      buffer: Buffer.from('x'),
+      buffer: pngBuffer,
     } as Express.Multer.File;
     driverRepo.findOne.mockResolvedValue({
       id: 'driver-id',
@@ -175,7 +176,7 @@ describe('DriversService', () => {
     const file = {
       size: 100,
       mimetype: 'image/png',
-      buffer: Buffer.from('x'),
+      buffer: pngBuffer,
     } as Express.Multer.File;
     driverRepo.findOne.mockResolvedValue({
       id: 'driver-id',
@@ -307,7 +308,7 @@ describe('DriversService', () => {
     const file = {
       size: 100,
       mimetype: 'image/png',
-      buffer: Buffer.from('x'),
+      buffer: pngBuffer,
     } as Express.Multer.File;
     driverRepo.findOne.mockResolvedValue({
       id: 'driver-id',

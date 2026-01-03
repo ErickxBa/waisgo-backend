@@ -16,15 +16,22 @@ describe('BusinessService', () => {
     save: jest.fn(),
     create: jest.fn(),
   };
+  const authUserRepo = {
+    update: jest.fn(),
+  };
   const storageService = {
     getSignedUrl: jest.fn(),
     upload: jest.fn(),
   };
   const configService = {
     getOrThrow: jest.fn(),
+    get: jest.fn(),
   };
   const auditService = {
     logEvent: jest.fn(),
+  };
+  const redisService = {
+    revokeUserSessions: jest.fn(),
   };
 
   const context: AuthContext = { ip: '127.0.0.1', userAgent: 'jest' };
@@ -36,9 +43,11 @@ describe('BusinessService', () => {
     service = new BusinessService(
       businessUserRepo as never,
       profileRepo as never,
+      authUserRepo as never,
       storageService as never,
       configService as never,
       auditService as never,
+      redisService as never,
     );
   });
 
@@ -153,7 +162,7 @@ describe('BusinessService', () => {
     businessUserRepo.findOne.mockResolvedValue(null);
 
     await expect(service.getMyProfile('user-id')).rejects.toThrow(
-      ErrorMessages.USER.NOT_FOUND,
+      ErrorMessages.USER.PROFILE_NOT_FOUND,
     );
   });
 
@@ -210,8 +219,9 @@ describe('BusinessService', () => {
       service.updateProfilePhoto(
         'user-id',
         {
-          buffer: Buffer.from('file'),
+          buffer: Buffer.from([0xff, 0xd8, 0xff, 0x00]),
           mimetype: 'image/jpeg',
+          size: 100,
         } as Express.Multer.File,
         context,
       ),
@@ -236,8 +246,9 @@ describe('BusinessService', () => {
     const response = await service.updateProfilePhoto(
       'user-id',
       {
-        buffer: Buffer.from('file'),
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x00]),
         mimetype: 'image/jpeg',
+        size: 100,
       } as Express.Multer.File,
       context,
     );

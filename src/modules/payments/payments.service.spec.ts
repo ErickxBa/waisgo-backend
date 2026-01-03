@@ -40,6 +40,13 @@ describe('PaymentsService', () => {
     store: jest.fn(),
   };
 
+  const structuredLogger = {
+    logSuccess: jest.fn(),
+    logFailure: jest.fn(),
+    logDenied: jest.fn(),
+    logCritical: jest.fn(),
+  };
+
   let service: PaymentsService;
 
   beforeEach(() => {
@@ -53,6 +60,7 @@ describe('PaymentsService', () => {
       configService as unknown as never,
       paypalClient as unknown as never,
       idempotencyService as unknown as never,
+      structuredLogger as never,
     );
   });
 
@@ -283,10 +291,7 @@ describe('PaymentsService', () => {
       links: [{ rel: 'approve', href: 'http://approval' }],
     });
 
-    const response = await service.createPaypalOrder(
-      'passenger-id',
-      'PAY_123',
-    );
+    const response = await service.createPaypalOrder('passenger-id', 'PAY_123');
 
     expect(response).toEqual({
       message: ErrorMessages.PAYMENTS.PAYPAL_ORDER_CREATED,
@@ -302,6 +307,8 @@ describe('PaymentsService', () => {
       booking: { passengerId: 'passenger-id' },
       method: MetodoPagoEnum.PAYPAL,
       status: EstadoPagoEnum.PENDING,
+      amount: 2.5,
+      currency: 'USD',
       paypalOrderId: 'ORDER_123',
     } as Payment;
 
@@ -312,7 +319,12 @@ describe('PaymentsService', () => {
       purchase_units: [
         {
           payments: {
-            captures: [{ id: 'CAPTURE_1' }],
+            captures: [
+              {
+                id: 'CAPTURE_1',
+                amount: { value: '2.50', currency_code: 'USD' },
+              },
+            ],
           },
         },
       ],
@@ -359,17 +371,17 @@ describe('PaymentsService', () => {
   it('getDriverPayments throws when user is not a driver', async () => {
     driverRepo.findOne.mockResolvedValue(null);
 
-    await expect(
-      service.getDriverPayments('user-id'),
-    ).rejects.toThrow(ErrorMessages.DRIVER.NOT_A_DRIVER);
+    await expect(service.getDriverPayments('user-id')).rejects.toThrow(
+      ErrorMessages.DRIVER.NOT_A_DRIVER,
+    );
   });
 
   it('reversePayment throws when payment is missing', async () => {
     paymentRepo.findOne.mockResolvedValue(null);
 
-    await expect(
-      service.reversePayment('PAY_123'),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.reversePayment('PAY_123')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('reversePayment throws when payment is not paid', async () => {
@@ -396,9 +408,9 @@ describe('PaymentsService', () => {
     paymentRepo.save.mockResolvedValue(payment);
     paypalClient.request.mockRejectedValue(new Error('refund-failed'));
 
-    await expect(
-      service.reversePayment('PAY_123'),
-    ).rejects.toThrow(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
+    await expect(service.reversePayment('PAY_123')).rejects.toThrow(
+      ErrorMessages.PAYMENTS.PAYMENT_FAILED,
+    );
 
     expect(payment.status).toBe(EstadoPagoEnum.FAILED);
     expect(paymentRepo.save).toHaveBeenCalled();
@@ -414,11 +426,10 @@ describe('PaymentsService', () => {
     paymentRepo.findOne.mockResolvedValue(payment);
     paymentRepo.save.mockResolvedValue(payment);
 
-    const response = await service.reversePayment(
-      'PAY_123',
-      'admin-id',
-      { ip: '127.0.0.1', userAgent: 'jest' },
-    );
+    const response = await service.reversePayment('PAY_123', 'admin-id', {
+      ip: '127.0.0.1',
+      userAgent: 'jest',
+    });
 
     expect(response).toEqual({
       message: ErrorMessages.PAYMENTS.PAYMENT_REVERSED,

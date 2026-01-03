@@ -40,6 +40,7 @@ export class BookingsController {
   @Roles(RolUsuarioEnum.PASAJERO)
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 5, ttl: 600000 } }) // 5 reservas por 10 minutos
   @ApiOperation({ summary: 'Crear reserva en una ruta' })
   @ApiResponse({ status: 201, description: 'Reserva creada y confirmada.' })
   @ApiResponse({ status: 400, description: 'Pasajero bloqueado o ruta llena.' })
@@ -73,16 +74,14 @@ export class BookingsController {
   @ApiParam({ name: 'id', description: 'ID de la reserva' })
   @ApiResponse({ status: 200, description: 'Detalle de la reserva.' })
   @ApiResponse({ status: 404, description: 'Reserva no encontrada.' })
-  async getBookingById(
-    @User() user: JwtPayload,
-    @Param('id') id: string,
-  ) {
+  async getBookingById(@User() user: JwtPayload, @Param('id') id: string) {
     const safeId = validateIdentifier(id);
     return this.bookingsService.getBookingById(user.sub, safeId);
   }
 
   @Roles(RolUsuarioEnum.PASAJERO)
   @Patch(':id/cancel')
+  @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 cancelaciones por 5 minutos
   @ApiOperation({ summary: 'Cancelar una reserva' })
   @ApiParam({ name: 'id', description: 'ID de la reserva' })
   @ApiResponse({ status: 200, description: 'Reserva cancelada.' })
@@ -106,10 +105,7 @@ export class BookingsController {
   @ApiParam({ name: 'id', description: 'ID de la reserva' })
   @ApiResponse({ status: 200, description: 'Coordenadas de la ruta.' })
   @ApiResponse({ status: 403, description: 'Reserva no activa, sin acceso.' })
-  async getBookingMap(
-    @User() user: JwtPayload,
-    @Param('id') id: string,
-  ) {
+  async getBookingMap(@User() user: JwtPayload, @Param('id') id: string) {
     const safeId = validateIdentifier(id);
     return this.bookingsService.getBookingMap(user.sub, safeId);
   }
