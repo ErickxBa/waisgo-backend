@@ -14,10 +14,10 @@ const setDefault = (key: string, value: string) => {
 export const configureTestEnv = (
   options: ConfigureTestEnvOptions = {},
 ): void => {
-  const envPath =
-    process.env.TEST_ENV_FILE || path.join(process.cwd(), '.env.test');
   dotenv.config({ path: path.join(process.cwd(), '.env') });
-  dotenv.config({ path: envPath, override: true });
+  if (process.env.TEST_ENV_FILE) {
+    dotenv.config({ path: process.env.TEST_ENV_FILE, override: true });
+  }
 
   setDefault('NODE_ENV', 'test');
 

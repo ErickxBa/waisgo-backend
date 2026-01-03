@@ -21,7 +21,7 @@ export class MinioStorageService implements OnModuleInit, StorageProvider {
     this.client = new Client({
       endPoint: this.configService.getOrThrow('MINIO_ENDPOINT'),
       port: Number(this.configService.getOrThrow('MINIO_PORT')),
-      useSSL: this.configService.get('MINIO_USE_SSL') === 'true',
+      useSSL: this.configService.get<boolean>('MINIO_USE_SSL', false),
       accessKey: this.configService.getOrThrow('MINIO_ACCESS_KEY'),
       secretKey: this.configService.getOrThrow('MINIO_SECRET_KEY'),
     });

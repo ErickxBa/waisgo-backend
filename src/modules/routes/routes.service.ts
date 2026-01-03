@@ -60,10 +60,6 @@ export class RoutesService {
     route: Route,
     userId: string,
   ): Promise<void> {
-    if (route.estado === EstadoRutaEnum.ACTIVA) {
-      return;
-    }
-
     if (route.driver?.userId && route.driver.userId === userId) {
       return;
     }
@@ -72,9 +68,11 @@ export class RoutesService {
       where: { routeId: route.id, passengerId: userId },
     });
 
-    if (!booking) {
-      throw new NotFoundException(ErrorMessages.ROUTES.ROUTE_NOT_FOUND);
+    if (booking) {
+      return;
     }
+
+    throw new NotFoundException(ErrorMessages.ROUTES.ROUTE_NOT_FOUND);
   }
 
   private async getApprovedDriver(userId: string): Promise<Driver> {

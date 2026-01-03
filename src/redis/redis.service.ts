@@ -144,6 +144,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return tokenIssuedAt < revokedTimestamp;
   }
 
+  async revokeUserSessions(
+    userId: string,
+    ttlSeconds: number,
+  ): Promise<void> {
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return;
+    }
+
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    await this.set(`revoke:user:${userId}`, nowInSeconds, ttlSeconds);
+  }
+
   async exists(key: string): Promise<boolean> {
     this.validateKey(key);
     const result = await this.client.exists(key);

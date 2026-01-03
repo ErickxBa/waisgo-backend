@@ -17,6 +17,7 @@ import { ErrorMessages } from '../common/constants/error-messages.constant';
 
 import { EstadoVerificacionEnum, RolUsuarioEnum } from './Enum';
 import { AuditAction, AuditResult } from '../audit/Enums';
+import { parseDurationToSeconds } from '../common/utils/duration.util';
 
 import { LoginDto, RegisterUserDto } from './Dto';
 import { AuthContext } from '../common/types';
@@ -41,13 +42,13 @@ export class AuthService {
   private readonly RESET_TTL_SECONDS: number;
   private readonly RESET_PREFIX = 'reset:token:';
   private readonly REVOKE_PREFIX = 'revoke:jti:';
-  private readonly REVOKE_USER_PREFIX = 'revoke:user:';
 
   // NUEVAS CONSTANTES PARA LIMITE Y LINK ÚNICO
   private readonly RESET_LIMIT_PREFIX = 'reset:limit:';
   private readonly RESET_ACTIVE_PREFIX = 'reset:active:';
   private readonly MAX_RESET_ATTEMPTS: number;
   private readonly RESET_LIMIT_TTL = 60 * 60;
+  private readonly DEFAULT_REVOKE_TTL_SECONDS = 8 * 60 * 60;
 
   constructor(
     @InjectRepository(AuthUser)
@@ -347,12 +348,9 @@ export class AuthService {
     await this.redisService.del(redisKey);
     await this.redisService.del(`${this.RESET_ACTIVE_PREFIX}${user.id}`);
 
-    const nowInSeconds = Math.floor(Date.now() / 1000);
-
-    await this.redisService.set(
-      `${this.REVOKE_USER_PREFIX}${user.id}`,
-      nowInSeconds,
-      28800,
+    await this.redisService.revokeUserSessions(
+      user.id,
+      this.getSessionRevokeTtlSeconds(),
     );
 
     // Auditar reset completado
@@ -437,6 +435,10 @@ export class AuthService {
 
     user.credential.passwordHash = await bcrypt.hash(newPass, 12);
     await this.authUserRepo.save(user);
+    await this.redisService.revokeUserSessions(
+      user.id,
+      this.getSessionRevokeTtlSeconds(),
+    );
 
     // Auditar cambio exitoso
     await this.auditService.logEvent({
@@ -484,6 +486,13 @@ export class AuthService {
     count++;
 
     await this.redisService.set(key, count, this.RESET_LIMIT_TTL);
+  }
+
+  private getSessionRevokeTtlSeconds(): number {
+    return parseDurationToSeconds(
+      this.JWT_EXPIRES_IN,
+      this.DEFAULT_REVOKE_TTL_SECONDS,
+    );
   }
 
   async findForVerification(userId: string) {

@@ -27,6 +27,7 @@ import { AuthService } from '../auth/auth.service';
 import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
+import { hasValidFileSignature } from '../common/utils/file-validation.util';
 
 export interface DriverDocumentWithUrl extends DriverDocument {
   signedUrl: string;
@@ -49,6 +50,7 @@ export class DriversService {
   private readonly ALLOWED_MIMES = [
     'image/png',
     'image/jpeg',
+    'image/jpg',
     'application/pdf',
   ];
   private readonly REJECTION_COOLDOWN_DAYS = 7;
@@ -301,6 +303,10 @@ export class DriversService {
     }
 
     if (!this.ALLOWED_MIMES.includes(file.mimetype)) {
+      throw new BadRequestException(ErrorMessages.DRIVER.INVALID_FILE_FORMAT);
+    }
+
+    if (!hasValidFileSignature(file.buffer, file.mimetype)) {
       throw new BadRequestException(ErrorMessages.DRIVER.INVALID_FILE_FORMAT);
     }
 

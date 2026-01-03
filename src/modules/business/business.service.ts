@@ -1,5 +1,5 @@
 import { StorageService } from './../storage/storage.service';
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BusinessUser } from './Models/business-user.entity';
 import { UserProfile } from './Models/user-profile.entity';
@@ -11,19 +11,34 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
 import type { AuthContext } from '../common/types';
 import { generatePublicId } from '../common/utils/public-id.util';
+import { AuthUser } from '../auth/Models/auth-user.entity';
+import { RedisService } from 'src/redis/redis.service';
+import { parseDurationToSeconds } from '../common/utils/duration.util';
+import { hasValidFileSignature } from '../common/utils/file-validation.util';
 
 @Injectable()
 export class BusinessService {
   private readonly logger = new Logger(BusinessService.name);
+  private readonly DEFAULT_REVOKE_TTL_SECONDS = 8 * 60 * 60;
+  private readonly SOFT_DELETE_BLOCK_YEARS = 100;
+  private readonly MAX_PROFILE_PHOTO_SIZE = 2 * 1024 * 1024;
+  private readonly ALLOWED_PROFILE_MIMES = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+  ];
 
   constructor(
     @InjectRepository(BusinessUser)
     private readonly businessUserRepo: Repository<BusinessUser>,
     @InjectRepository(UserProfile)
     private readonly profileRepo: Repository<UserProfile>,
+    @InjectRepository(AuthUser)
+    private readonly authUserRepo: Repository<AuthUser>,
     private readonly storageService: StorageService,
     private readonly config: ConfigService,
     private readonly auditService: AuditService,
+    private readonly redisService: RedisService,
   ) {}
 
   private generateAlias(): string {
@@ -156,6 +171,21 @@ export class BusinessService {
     if (result.affected === 0) {
       this.logger.warn(`User not found or already deleted: ${userId}`);
     } else {
+      const blockedUntil = new Date();
+      blockedUntil.setFullYear(
+        blockedUntil.getFullYear() + this.SOFT_DELETE_BLOCK_YEARS,
+      );
+
+      await this.authUserRepo.update(
+        { id: userId },
+        { bloqueadoHasta: blockedUntil },
+      );
+
+      await this.redisService.revokeUserSessions(
+        userId,
+        this.getSessionRevokeTtlSeconds(),
+      );
+
       this.logger.log(`User soft deleted: ${userId}`);
 
       await this.auditService.logEvent({
@@ -238,6 +268,22 @@ export class BusinessService {
     file: Express.Multer.File,
     context?: AuthContext,
   ): Promise<{ message: string }> {
+    if (!file) {
+      throw new BadRequestException(ErrorMessages.DRIVER.FILE_REQUIRED);
+    }
+
+    if (file.size > this.MAX_PROFILE_PHOTO_SIZE) {
+      throw new BadRequestException(ErrorMessages.DRIVER.FILE_TOO_LARGE);
+    }
+
+    if (!this.ALLOWED_PROFILE_MIMES.includes(file.mimetype)) {
+      throw new BadRequestException(ErrorMessages.DRIVER.INVALID_FILE_FORMAT);
+    }
+
+    if (!hasValidFileSignature(file.buffer, file.mimetype)) {
+      throw new BadRequestException(ErrorMessages.DRIVER.INVALID_FILE_FORMAT);
+    }
+
     const profile = await this.profileRepo.findOne({ where: { userId } });
 
     if (!profile) {
@@ -271,6 +317,13 @@ export class BusinessService {
     return this.storageService.getSignedUrl(
       this.config.getOrThrow('STORAGE_PROFILE_BUCKET'),
       'avatars/default.jpg',
+    );
+  }
+
+  private getSessionRevokeTtlSeconds(): number {
+    return parseDurationToSeconds(
+      this.config.get<string>('JWT_EXPIRES_IN'),
+      this.DEFAULT_REVOKE_TTL_SECONDS,
     );
   }
 }

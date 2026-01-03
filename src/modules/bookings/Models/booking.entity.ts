@@ -49,7 +49,7 @@ export class Booking {
   })
   estado: EstadoReservaEnum;
 
-  @Column({ type: 'varchar', length: 6 })
+  @Column({ type: 'text', select: false })
   otp: string;
 
   @Column({ type: 'boolean', default: false })

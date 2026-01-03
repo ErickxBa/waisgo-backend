@@ -28,6 +28,8 @@ import { BusinessService } from './business.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 
+const PROFILE_PHOTO_MAX_SIZE = 2 * 1024 * 1024;
+
 @ApiTags('Business')
 @Controller('business')
 export class BusinessController {
@@ -133,7 +135,11 @@ export class BusinessController {
     status: 403,
     description: 'Acceso denegado. Solo usuarios con rol PASAJERO.',
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: PROFILE_PHOTO_MAX_SIZE },
+    }),
+  )
   async updateProfilePhoto(
     @User() user: JwtPayload,
     @UploadedFile() file: Express.Multer.File,

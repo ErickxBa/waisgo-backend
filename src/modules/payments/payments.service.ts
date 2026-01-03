@@ -15,6 +15,7 @@ import { EstadoPagoEnum, MetodoPagoEnum } from './Enums';
 import { PaypalClientService } from './paypal-client.service';
 import { Booking } from '../bookings/Models/booking.entity';
 import { Driver } from '../drivers/Models/driver.entity';
+import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 import { EstadoReservaEnum } from '../bookings/Enums';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResult } from '../audit/Enums';
@@ -32,6 +33,10 @@ type PaypalOrderResponse = {
       captures?: Array<{
         id?: string;
         status?: string;
+        amount?: {
+          value?: string;
+          currency_code?: string;
+        };
       }>;
     };
   }>;
@@ -375,8 +380,30 @@ export class PaymentsService {
       throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
     }
 
-    const captureId =
-      capture.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? null;
+    const captureDetails =
+      capture.purchase_units?.[0]?.payments?.captures?.[0] ?? null;
+    const captureId = captureDetails?.id ?? null;
+    const captureAmount = captureDetails?.amount?.value ?? null;
+    const captureCurrency = captureDetails?.amount?.currency_code ?? null;
+
+    const expectedAmount = Number(payment.amount).toFixed(2);
+
+    if (!captureAmount || !captureCurrency) {
+      payment.status = EstadoPagoEnum.FAILED;
+      payment.failureReason = 'Missing PayPal capture details';
+      await this.paymentRepository.save(payment);
+      throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
+    }
+
+    if (
+      captureCurrency !== payment.currency ||
+      Number(captureAmount).toFixed(2) !== expectedAmount
+    ) {
+      payment.status = EstadoPagoEnum.FAILED;
+      payment.failureReason = `Capture mismatch: ${captureAmount} ${captureCurrency}`;
+      await this.paymentRepository.save(payment);
+      throw new BadRequestException(ErrorMessages.PAYMENTS.PAYMENT_FAILED);
+    }
 
     payment.status = EstadoPagoEnum.PAID;
     payment.paidAt = new Date();
@@ -422,6 +449,10 @@ export class PaymentsService {
 
     if (!driver) {
       throw new NotFoundException(ErrorMessages.DRIVER.NOT_A_DRIVER);
+    }
+
+    if (driver.estado !== EstadoConductorEnum.APROBADO) {
+      throw new ForbiddenException(ErrorMessages.DRIVER.DRIVER_NOT_APPROVED);
     }
 
     const query = this.paymentRepository

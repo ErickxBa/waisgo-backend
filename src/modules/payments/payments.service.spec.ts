@@ -302,6 +302,8 @@ describe('PaymentsService', () => {
       booking: { passengerId: 'passenger-id' },
       method: MetodoPagoEnum.PAYPAL,
       status: EstadoPagoEnum.PENDING,
+      amount: 2.5,
+      currency: 'USD',
       paypalOrderId: 'ORDER_123',
     } as Payment;
 
@@ -312,7 +314,12 @@ describe('PaymentsService', () => {
       purchase_units: [
         {
           payments: {
-            captures: [{ id: 'CAPTURE_1' }],
+            captures: [
+              {
+                id: 'CAPTURE_1',
+                amount: { value: '2.50', currency_code: 'USD' },
+              },
+            ],
           },
         },
       ],

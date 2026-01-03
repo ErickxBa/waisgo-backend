@@ -45,6 +45,7 @@ describe('AuthService', () => {
     get: jest.fn(),
     set: jest.fn(),
     del: jest.fn(),
+    revokeUserSessions: jest.fn(),
   };
   const mailService = {
     sendResetPasswordEmail: jest.fn(),
@@ -380,11 +381,7 @@ describe('AuthService', () => {
       'reset:token:d290f1ee-6c54-4b01-90e6-d701748f0851',
     );
     expect(redisService.del).toHaveBeenCalledWith('reset:active:user-id');
-    expect(redisService.set).toHaveBeenCalledWith(
-      'revoke:user:user-id',
-      expect.any(Number),
-      28800,
-    );
+    expect(redisService.revokeUserSessions).toHaveBeenCalledWith('user-id', 28800);
     expect(auditService.logEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: AuditAction.PASSWORD_RESET_COMPLETE,
@@ -465,6 +462,7 @@ describe('AuthService', () => {
       message: ErrorMessages.AUTH.PASSWORD_CHANGE_SUCCESS,
     });
     expect(authUserRepo.save).toHaveBeenCalled();
+    expect(redisService.revokeUserSessions).toHaveBeenCalledWith('user-id', 28800);
     expect(auditService.logEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: AuditAction.PASSWORD_CHANGE,

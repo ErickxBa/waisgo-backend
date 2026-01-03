@@ -4,10 +4,12 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { randomInt } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
 import { Booking } from './Models/booking.entity';
 import { CreateBookingDto } from './Dto';
 import { EstadoReservaEnum } from './Enums';
@@ -15,6 +17,7 @@ import { Route } from '../routes/Models/route.entity';
 import { RouteStop } from '../routes/Models/route-stop.entity';
 import { EstadoRutaEnum } from '../routes/Enums';
 import { Driver } from '../drivers/Models/driver.entity';
+import { EstadoConductorEnum } from '../drivers/Enums/estado-conductor.enum';
 import { UserProfile } from '../business/Models/user-profile.entity';
 import { Payment } from '../payments/Models/payment.entity';
 import { EstadoPagoEnum, MetodoPagoEnum } from '../payments/Enums';
@@ -26,6 +29,11 @@ import type { AuthContext } from '../common/types';
 import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
 import { planStopInsertion } from '../common/utils/route-stop.util';
 import { getDepartureDate } from '../common/utils/route-time.util';
+import {
+  decryptOtp,
+  encryptOtp,
+  secureCompare,
+} from '../common/utils/otp-crypto.util';
 
 type PickupDetails = {
   hasPickup: boolean;
@@ -53,6 +61,7 @@ export class BookingsService {
     private readonly paymentRepository: Repository<Payment>,
     private readonly paymentsService: PaymentsService,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -108,6 +117,46 @@ export class BookingsService {
     if (Number(route.precioPasajero) <= 0) {
       throw new BadRequestException(ErrorMessages.ROUTES.ROUTE_PRICE_REQUIRED);
     }
+  }
+
+  private getOtpSecret(): string {
+    const secret =
+      this.configService.get<string>('OTP_SECRET') ||
+      this.configService.get<string>('JWT_SECRET');
+
+    if (!secret) {
+      throw new InternalServerErrorException(
+        ErrorMessages.SYSTEM.INTERNAL_ERROR,
+      );
+    }
+
+    return secret;
+  }
+
+  private normalizeOtpForResponse(booking: Booking): void {
+    if (!booking?.otp) {
+      return;
+    }
+    const secret = this.getOtpSecret();
+    if (!secret) {
+      return;
+    }
+    const decrypted = decryptOtp(booking.otp, secret);
+    booking.otp = decrypted ?? booking.otp;
+  }
+
+  private isOtpMatch(storedOtp: string, providedOtp: string): boolean {
+    const secret = this.getOtpSecret();
+    const normalizedProvided = providedOtp.trim();
+
+    if (!secret) {
+      return false;
+    }
+
+    const decrypted = decryptOtp(storedOtp, secret);
+    const candidate = decrypted ?? storedOtp;
+
+    return secureCompare(candidate, normalizedProvided);
   }
 
   private async insertPickupStop(
@@ -192,7 +241,7 @@ export class BookingsService {
       routeId: route.id,
       passengerId,
       estado: EstadoReservaEnum.CONFIRMADA,
-      otp: generatedOtp,
+      otp: encryptOtp(generatedOtp, this.getOtpSecret()),
       otpUsado: false,
       metodoPago: dto.metodoPago,
     });
@@ -244,6 +293,22 @@ export class BookingsService {
       userAgent: context?.userAgent,
       metadata: { routeId },
     });
+  }
+
+  private async getApprovedDriver(userId: string): Promise<Driver> {
+    const driver = await this.driverRepository.findOne({
+      where: { userId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException(ErrorMessages.DRIVER.NOT_A_DRIVER);
+    }
+
+    if (driver.estado !== EstadoConductorEnum.APROBADO) {
+      throw new ForbiddenException(ErrorMessages.DRIVER.DRIVER_NOT_APPROVED);
+    }
+
+    return driver;
   }
 
   /**
@@ -334,6 +399,7 @@ export class BookingsService {
       .leftJoinAndSelect('driverUser.profile', 'driverProfile')
       .where('booking.passengerId = :passengerId', { passengerId })
       .orderBy('booking.createdAt', 'DESC');
+    query.addSelect('booking.otp');
 
     if (estado) {
       if (
@@ -347,6 +413,7 @@ export class BookingsService {
     }
 
     const bookings = await query.getMany();
+    bookings.forEach((booking) => this.normalizeOtpForResponse(booking));
 
     return {
       message: ErrorMessages.BOOKINGS.BOOKINGS_LIST,
@@ -361,19 +428,24 @@ export class BookingsService {
     passengerId: string,
     bookingId: string,
   ): Promise<{ message: string; data?: Booking }> {
-    const booking = await this.bookingRepository.findOne({
-      where: buildIdWhere<Booking>(bookingId),
-      relations: [
-        'route',
-        'route.stops',
-        'route.driver',
-        'route.driver.user',
-        'route.driver.user.profile',
-      ],
-    });
+    const booking = await this.bookingRepository
+      .createQueryBuilder('booking')
+      .leftJoinAndSelect('booking.route', 'route')
+      .leftJoinAndSelect('route.stops', 'stops')
+      .leftJoinAndSelect('route.driver', 'driver')
+      .leftJoinAndSelect('driver.user', 'driverUser')
+      .leftJoinAndSelect('driverUser.profile', 'driverProfile')
+      .addSelect('booking.otp')
+      .where('booking.publicId = :bookingId', { bookingId })
+      .orWhere('booking.id = :bookingId', { bookingId })
+      .getOne();
 
     if (booking?.passengerId !== passengerId) {
       throw new NotFoundException(ErrorMessages.BOOKINGS.BOOKING_NOT_FOUND);
+    }
+
+    if (booking) {
+      this.normalizeOtpForResponse(booking);
     }
 
     return {
@@ -513,13 +585,7 @@ export class BookingsService {
     driverUserId: string,
     routeId: string,
   ): Promise<{ message: string; data?: Booking[] }> {
-    const driver = await this.driverRepository.findOne({
-      where: { userId: driverUserId },
-    });
-
-    if (!driver) {
-      throw new NotFoundException(ErrorMessages.DRIVER.NOT_A_DRIVER);
-    }
+    const driver = await this.getApprovedDriver(driverUserId);
 
     const route = await this.routeRepository.findOne({
       where: buildIdWhere<Route>(routeId).map((where) => ({
@@ -552,13 +618,7 @@ export class BookingsService {
     bookingId: string,
     context?: AuthContext,
   ): Promise<{ message: string }> {
-    const driver = await this.driverRepository.findOne({
-      where: { userId: driverUserId },
-    });
-
-    if (!driver) {
-      throw new NotFoundException(ErrorMessages.DRIVER.NOT_A_DRIVER);
-    }
+    const driver = await this.getApprovedDriver(driverUserId);
 
     const booking = await this.bookingRepository.findOne({
       where: buildIdWhere<Booking>(bookingId),
@@ -601,13 +661,7 @@ export class BookingsService {
     bookingId: string,
     context?: AuthContext,
   ): Promise<{ message: string }> {
-    const driver = await this.driverRepository.findOne({
-      where: { userId: driverUserId },
-    });
-
-    if (!driver) {
-      throw new NotFoundException(ErrorMessages.DRIVER.NOT_A_DRIVER);
-    }
+    const driver = await this.getApprovedDriver(driverUserId);
 
     const booking = await this.bookingRepository.findOne({
       where: buildIdWhere<Booking>(bookingId),
@@ -674,18 +728,15 @@ export class BookingsService {
     otp: string,
     context?: AuthContext,
   ): Promise<{ message: string }> {
-    const driver = await this.driverRepository.findOne({
-      where: { userId: driverUserId },
-    });
+    const driver = await this.getApprovedDriver(driverUserId);
 
-    if (!driver) {
-      throw new NotFoundException(ErrorMessages.DRIVER.NOT_A_DRIVER);
-    }
-
-    const booking = await this.bookingRepository.findOne({
-      where: buildIdWhere<Booking>(bookingId),
-      relations: ['route'],
-    });
+    const booking = await this.bookingRepository
+      .createQueryBuilder('booking')
+      .leftJoinAndSelect('booking.route', 'route')
+      .addSelect('booking.otp')
+      .where('booking.publicId = :bookingId', { bookingId })
+      .orWhere('booking.id = :bookingId', { bookingId })
+      .getOne();
 
     if (!booking) {
       throw new NotFoundException(ErrorMessages.BOOKINGS.BOOKING_NOT_FOUND);
@@ -703,7 +754,7 @@ export class BookingsService {
       throw new BadRequestException(ErrorMessages.TRIP_OTP.OTP_ALREADY_USED);
     }
 
-    if (booking.otp !== otp) {
+    if (!this.isOtpMatch(booking.otp, otp)) {
       await this.auditService.logEvent({
         action: AuditAction.TRIP_OTP_INVALID,
         userId: driverUserId,

@@ -6,10 +6,10 @@ import { isValidIdentifier } from './public-id.util';
 
 export const buildAuthContext = (req: Request): AuthContext => {
   const forwardedFor = req.headers['x-forwarded-for'];
+  const forwardedIp =
+    typeof forwardedFor === 'string' ? forwardedFor.split(',')[0].trim() : '';
   const ip =
-    typeof forwardedFor === 'string'
-      ? forwardedFor.split(',')[0].trim()
-      : req.ip || req.socket?.remoteAddress || 'unknown';
+    req.ip || req.socket?.remoteAddress || forwardedIp || 'unknown';
 
   return {
     ip,

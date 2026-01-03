@@ -7,6 +7,7 @@ import type { AuthContext } from '../common/types';
 import * as publicIdUtil from '../common/utils/public-id.util';
 import * as routeStopUtil from '../common/utils/route-stop.util';
 import { EstadoPagoEnum } from '../payments/Enums';
+import { CampusOrigenEnum } from './Enums/campus-origen.enum';
 
 describe('RoutesService', () => {
   const routeRepository = {
@@ -77,9 +78,7 @@ describe('RoutesService', () => {
   it('throws when estado is invalid in getMyRoutes', async () => {
     driverRepository.findOne.mockResolvedValue({ id: 'driver-id' });
 
-    await expect(
-      service.getMyRoutes('user-id', 'INVALID'),
-    ).rejects.toThrow(
+    await expect(service.getMyRoutes('user-id', 'INVALID')).rejects.toThrow(
       ErrorMessages.VALIDATION.INVALID_FORMAT('estado'),
     );
   });
@@ -121,7 +120,7 @@ describe('RoutesService', () => {
       service.createRoute(
         'user-id',
         {
-          origen: 'CAMPUS_PRINCIPAL',
+          origen: CampusOrigenEnum.CAMPUS_PRINCIPAL,
           fecha: '2025-01-01',
           horaSalida: '10:00',
           destinoBase: 'Destino',
@@ -163,7 +162,7 @@ describe('RoutesService', () => {
     const response = await service.createRoute(
       'user-id',
       {
-        origen: 'CAMPUS_PRINCIPAL',
+        origen: CampusOrigenEnum.CAMPUS_PRINCIPAL,
         fecha: '2025-01-01',
         horaSalida: '10:00',
         destinoBase: 'Destino',
@@ -192,7 +191,7 @@ describe('RoutesService', () => {
       service.createRoute(
         'user-id',
         {
-          origen: 'CAMPUS_PRINCIPAL',
+          origen: CampusOrigenEnum.CAMPUS_PRINCIPAL,
           fecha: '2025-01-01',
           horaSalida: '10:00',
           destinoBase: 'Destino',
@@ -224,6 +223,7 @@ describe('RoutesService', () => {
       estado: EstadoRutaEnum.ACTIVA,
       driver: { userId: 'driver-user' },
     });
+    bookingRepository.findOne.mockResolvedValue({ id: 'booking-id' });
     routeStopRepository.find.mockResolvedValue([{ id: 'stop-1', orden: 1 }]);
 
     const result = await service.getRouteMap('user-id', 'RTE_123');
@@ -253,7 +253,7 @@ describe('RoutesService', () => {
       .spyOn(routeStopUtil, 'planStopInsertion')
       .mockReturnValue({
         newOrder: 2,
-        updates: [{ id: 's2', orden: 3, lat: 1, lng: 1 }],
+        updates: [{ orden: 3, lat: 1, lng: 1 }],
       });
     const idSpy = jest
       .spyOn(publicIdUtil, 'generatePublicId')
@@ -284,8 +284,8 @@ describe('RoutesService', () => {
     });
 
     const payments = [
-      { id: 'pay-1', status: EstadoPagoEnum.PAID },
-      { id: 'pay-2', status: EstadoPagoEnum.PENDING },
+      { id: 'pay-1', status: EstadoPagoEnum.PAID, failureReason: null },
+      { id: 'pay-2', status: EstadoPagoEnum.PENDING, failureReason: null },
     ];
     const paymentsQuery = {
       leftJoin: jest.fn().mockReturnThis(),
@@ -294,7 +294,9 @@ describe('RoutesService', () => {
       getMany: jest.fn().mockResolvedValue(payments),
     };
     paymentRepository.createQueryBuilder.mockReturnValue(paymentsQuery);
-    paymentsService.reversePayment.mockRejectedValue(new Error('refund failed'));
+    paymentsService.reversePayment.mockRejectedValue(
+      new Error('refund failed'),
+    );
     paymentRepository.save.mockResolvedValue({});
 
     await service.cancelRoute('user-id', 'RTE_123', context);

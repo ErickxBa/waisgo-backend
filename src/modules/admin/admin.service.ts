@@ -21,6 +21,8 @@ import { StorageService } from '../storage/storage.service';
 import type { AuthContext } from '../common/types';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { buildIdWhere } from '../common/utils/public-id.util';
+import { parseDurationToSeconds } from '../common/utils/duration.util';
+import { RedisService } from 'src/redis/redis.service';
 
 export interface DocumentWithSignedUrl {
   id: string;
@@ -56,6 +58,7 @@ export interface DriverDetailResponse {
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
+  private readonly DEFAULT_REVOKE_TTL_SECONDS = 8 * 60 * 60;
 
   constructor(
     @InjectRepository(Driver)
@@ -69,6 +72,7 @@ export class AdminService {
     private readonly mailService: MailService,
     private readonly storageService: StorageService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -245,6 +249,11 @@ export class AdminService {
 
       await queryRunner.commitTransaction();
 
+      await this.redisService.revokeUserSessions(
+        driver.userId,
+        this.getSessionRevokeTtlSeconds(),
+      );
+
       await this.auditService.logEvent({
         action: AuditAction.DRIVER_APPLICATION_APPROVED,
         userId: adminUserId,
@@ -348,6 +357,11 @@ export class AdminService {
 
     driver.estado = EstadoConductorEnum.SUSPENDIDO;
     await this.driverRepo.save(driver);
+
+    await this.redisService.revokeUserSessions(
+      driver.userId,
+      this.getSessionRevokeTtlSeconds(),
+    );
 
     await this.auditService.logEvent({
       action: AuditAction.ADMIN_USER_SUSPENSION,
@@ -497,5 +511,12 @@ export class AdminService {
         `Failed to send rejection notification: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
+  }
+
+  private getSessionRevokeTtlSeconds(): number {
+    return parseDurationToSeconds(
+      this.configService.get<string>('JWT_EXPIRES_IN'),
+      this.DEFAULT_REVOKE_TTL_SECONDS,
+    );
   }
 }

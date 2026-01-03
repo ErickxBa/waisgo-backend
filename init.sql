@@ -5,6 +5,31 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =========================
+-- VARIABLES DE ENTORNO
+-- =========================
+-- Requiere: POSTGRES_DB, WASIGO_APP_PASSWORD, WASIGO_MIGRATOR_PASSWORD
+\set ON_ERROR_STOP on
+\getenv POSTGRES_DB POSTGRES_DB
+\getenv WASIGO_APP_PASSWORD WASIGO_APP_PASSWORD
+\getenv WASIGO_MIGRATOR_PASSWORD WASIGO_MIGRATOR_PASSWORD
+
+\if :{?POSTGRES_DB}
+\else
+\echo 'POSTGRES_DB no está definido'
+\quit 1
+\endif
+\if :{?WASIGO_APP_PASSWORD}
+\else
+\echo 'WASIGO_APP_PASSWORD no está definido'
+\quit 1
+\endif
+\if :{?WASIGO_MIGRATOR_PASSWORD}
+\else
+\echo 'WASIGO_MIGRATOR_PASSWORD no está definido'
+\quit 1
+\endif
+
+-- =========================
 -- SCHEMAS
 -- =========================
 CREATE SCHEMA IF NOT EXISTS auth;
@@ -14,23 +39,18 @@ CREATE SCHEMA IF NOT EXISTS audit;
 -- =========================
 -- ROLES
 -- =========================
--- Usamos DO block para evitar error si ya existen
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'wasigo_app') THEN
-    CREATE ROLE wasigo_app LOGIN PASSWORD 'wasigo_app_pwd';
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'wasigo_migrator') THEN
-    CREATE ROLE wasigo_migrator LOGIN PASSWORD 'wasigo_migrator_pwd';
-  END IF;
-END
-$$;
+-- Creamos roles usando SELECT para verificar existencia (compatible con psql variables)
+SELECT 'CREATE ROLE wasigo_app LOGIN PASSWORD ' || quote_literal(:'WASIGO_APP_PASSWORD')
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'wasigo_app') \gexec
+
+SELECT 'CREATE ROLE wasigo_migrator LOGIN PASSWORD ' || quote_literal(:'WASIGO_MIGRATOR_PASSWORD')
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'wasigo_migrator') \gexec
 
 -- =========================
 -- PERMISOS DATABASE
 -- =========================
 
-GRANT CONNECT ON DATABASE wasigo TO wasigo_app, wasigo_migrator;
+GRANT CONNECT ON DATABASE :"POSTGRES_DB" TO wasigo_app, wasigo_migrator;
 
 -- =========================
 -- PERMISOS PUBLIC (CRÍTICO PARA UUID)
@@ -85,22 +105,15 @@ ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA auth GRANT USAGE, SE
 ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA business GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO wasigo_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA business GRANT USAGE, SELECT ON SEQUENCES TO wasigo_app;
 
-ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit GRANT INSERT ON TABLES TO wasigo_app;
+-- AUDIT: SELECT + INSERT (necesario para INSERT RETURNING)
+ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit GRANT SELECT, INSERT ON TABLES TO wasigo_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit GRANT USAGE, SELECT ON SEQUENCES TO wasigo_app;
 
--- AUDIT (CORREGIDO: INSERT + SELECT)
--- Esto soluciona el error "permission denied" al hacer INSERT RETURNING
-ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit 
-GRANT SELECT, INSERT ON TABLES TO wasigo_app; 
-
-ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit 
-GRANT USAGE, SELECT ON SEQUENCES TO wasigo_app;
-
-  -- =========================
-  -- HARDENING
-  -- =========================
-  REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-  REVOKE ALL ON DATABASE wasigo FROM PUBLIC;
+-- =========================
+-- HARDENING
+-- =========================
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+REVOKE ALL ON DATABASE :"POSTGRES_DB" FROM PUBLIC;
 
 -- =========================
 -- TEST DATABASE SETUP
@@ -156,14 +169,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA auth GRANT USAGE, SE
 ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA business GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO wasigo_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA business GRANT USAGE, SELECT ON SEQUENCES TO wasigo_app;
 
-ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit GRANT INSERT ON TABLES TO wasigo_app;
+-- AUDIT: SELECT + INSERT (necesario para INSERT RETURNING)
+ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit GRANT SELECT, INSERT ON TABLES TO wasigo_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit GRANT USAGE, SELECT ON SEQUENCES TO wasigo_app;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit
-GRANT SELECT, INSERT ON TABLES TO wasigo_app;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE wasigo_migrator IN SCHEMA audit
-GRANT USAGE, SELECT ON SEQUENCES TO wasigo_app;
 
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON DATABASE wasigo_test FROM PUBLIC;

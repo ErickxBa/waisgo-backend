@@ -51,6 +51,14 @@ import { AdminModule } from './modules/admin/admin.module';
         const isSslEnabled =
           configService.get('DB_SSL') === 'true' ||
           configService.get('DB_SSL') === true;
+        const rawCa = configService.get<string>('DB_SSL_CA');
+        const normalizedCa = rawCa ? rawCa.replace(/\\n/g, '\n') : undefined;
+        const sslConfig = isSslEnabled
+          ? {
+              rejectUnauthorized: true,
+              ...(normalizedCa ? { ca: normalizedCa } : {}),
+            }
+          : false;
 
         return {
           type: 'postgres',
@@ -61,7 +69,7 @@ import { AdminModule } from './modules/admin/admin.module';
           database: configService.get<string>('DB_NAME'),
           autoLoadEntities: true,
           synchronize: false,
-          ssl: isSslEnabled ? { rejectUnauthorized: false } : false,
+          ssl: sslConfig,
         };
       },
     }),
