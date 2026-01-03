@@ -38,6 +38,7 @@ import {
   encryptOtp,
   secureCompare,
 } from '../common/utils/otp-crypto.util';
+import { StructuredLogger, SecurityEventType } from '../common/logger';
 
 type PickupDetails = {
   hasPickup: boolean;
@@ -67,6 +68,7 @@ export class BookingsService {
     private readonly paymentsService: PaymentsService,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
+    private readonly structuredLogger: StructuredLogger,
   ) {}
 
   /**
@@ -420,6 +422,17 @@ export class BookingsService {
       metadata: { bookingId },
     });
 
+    this.structuredLogger.logSuccess(
+      SecurityEventType.BOOKING_CREATE,
+      'Booking creation',
+      passengerId,
+      `booking:${bookingPublicId}`,
+      {
+        routeId: dto.routeId,
+        metodoPago: dto.metodoPago,
+      },
+    );
+
     this.logger.log(`Booking created: ${bookingId} for route ${dto.routeId}`);
 
     return {
@@ -619,6 +632,18 @@ export class BookingsService {
       userAgent: context?.userAgent,
       metadata: { bookingId: booking.id, routeId: booking.routeId },
     });
+
+    this.structuredLogger.logSuccess(
+      SecurityEventType.BOOKING_CANCEL,
+      'Booking cancellation',
+      passengerId,
+      `booking:${booking.publicId}`,
+      {
+        routeId: booking.routeId,
+        eligibleForRefund,
+        paymentId: payment?.id,
+      },
+    );
 
     this.logger.log(`Booking cancelled: ${booking.id}`);
 

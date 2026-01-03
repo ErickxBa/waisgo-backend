@@ -23,6 +23,7 @@ import { ErrorMessages } from '../common/constants/error-messages.constant';
 import type { AuthContext } from '../common/types';
 import { buildIdWhere, generatePublicId } from '../common/utils/public-id.util';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { StructuredLogger, SecurityEventType } from '../common/logger';
 
 type PaypalOrderResponse = {
   id?: string;
@@ -55,6 +56,7 @@ export class PaymentsService {
     private readonly configService: ConfigService,
     private readonly paypalClient: PaypalClientService,
     private readonly idempotencyService: IdempotencyService,
+    private readonly structuredLogger: StructuredLogger,
   ) {}
 
   private paypalRequest<T>(
@@ -156,6 +158,19 @@ export class PaymentsService {
         amount,
       },
     });
+
+    this.structuredLogger.logSuccess(
+      SecurityEventType.PAYMENT_CREATE,
+      'Payment creation',
+      passengerId,
+      `payment:${savedPayment.publicId}`,
+      {
+        bookingId: booking.publicId,
+        method: dto.method,
+        amount,
+        currency: 'USD',
+      },
+    );
 
     const response = {
       message: ErrorMessages.PAYMENTS.PAYMENT_INITIATED,
@@ -422,6 +437,19 @@ export class PaymentsService {
         paypalCaptureId: captureId,
       },
     });
+
+    this.structuredLogger.logSuccess(
+      SecurityEventType.PAYMENT_CAPTURE,
+      'PayPal payment capture',
+      passengerId,
+      `payment:${payment.publicId}`,
+      {
+        paypalOrderId,
+        captureId,
+        amount: payment.amount,
+        currency: payment.currency,
+      },
+    );
 
     const response = {
       message: ErrorMessages.PAYMENTS.PAYPAL_CAPTURED,

@@ -21,6 +21,7 @@ import { AuditModule } from '../audit/audit.module';
 import { MailModule } from '../mail/mail.module';
 import { StorageModule } from '../storage/storage.module';
 import { BusinessModule } from '../business/business.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { BusinessModule } from '../business/business.module';
     MailModule,
     StorageModule,
     BusinessModule,
+    CommonModule,
   ],
   controllers: [AdminDriversController, AdminSeedController],
   providers: [AdminService, AdminSeedService],

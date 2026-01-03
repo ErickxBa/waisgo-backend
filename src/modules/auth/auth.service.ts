@@ -14,6 +14,7 @@ import { EncryptJWT } from 'jose';
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorMessages } from '../common/constants/error-messages.constant';
+import { StructuredLogger, SecurityEventType } from '../common/logger';
 
 import { EstadoVerificacionEnum, RolUsuarioEnum } from './Enum';
 import { AuditAction, AuditResult } from '../audit/Enums';
@@ -59,6 +60,7 @@ export class AuthService {
     private readonly auditService: AuditService,
     private readonly redisService: RedisService,
     private readonly mailService: MailService,
+    private readonly structuredLogger: StructuredLogger,
   ) {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
     this.JWT_EXPIRES_IN =
@@ -100,7 +102,9 @@ export class AuthService {
 
     try {
       if (password !== confirmPassword) {
-        throw new BadRequestException(ErrorMessages.AUTH.PASSWORDS_DO_NOT_MATCH);
+        throw new BadRequestException(
+          ErrorMessages.AUTH.PASSWORDS_DO_NOT_MATCH,
+        );
       }
 
       const userId = randomUUID();
@@ -141,6 +145,14 @@ export class AuthService {
         metadata: { email: normalizedEmail },
       });
 
+      this.structuredLogger.logSuccess(
+        SecurityEventType.REGISTER,
+        'User registration',
+        userId,
+        `user:${userId}`,
+        { email: normalizedEmail, alias: businessIdentity.alias },
+      );
+
       this.logger.log(`User registered: ${userId}`);
 
       return {
@@ -150,6 +162,14 @@ export class AuthService {
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      this.structuredLogger.logFailure(
+        SecurityEventType.REGISTER,
+        'User registration',
+        error instanceof Error ? error.message : 'Unknown error',
+        undefined,
+        undefined,
+        error instanceof Error ? error.name : 'ERROR',
+      );
       this.logger.error('Registration failed', error);
       throw error;
     } finally {
@@ -167,6 +187,15 @@ export class AuthService {
       });
 
       if (!user?.credential) {
+        this.structuredLogger.logFailure(
+          SecurityEventType.LOGIN_FAILURE,
+          'User login',
+          'Invalid credentials',
+          undefined,
+          `user:${email}`,
+          'INVALID_CREDENTIALS',
+          { email, ip: context?.ip },
+        );
         this.logger.warn(`Intento de login fallido para email: ${email}`);
         throw new UnauthorizedException(ErrorMessages.AUTH.INVALID_CREDENTIALS);
       }
@@ -220,6 +249,14 @@ export class AuthService {
         userAgent: context?.userAgent,
         result: AuditResult.SUCCESS,
       });
+
+      this.structuredLogger.logSuccess(
+        SecurityEventType.LOGIN_SUCCESS,
+        'User login',
+        user.id,
+        `user:${user.id}`,
+        { email: user.email, role: user.rol, ip: context?.ip },
+      );
 
       return {
         token,

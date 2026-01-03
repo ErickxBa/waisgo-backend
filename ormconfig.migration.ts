@@ -1,6 +1,6 @@
 import { DataSource } from 'typeorm';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
+import * as path from 'node:path';
 
 const envPath = path.join(process.cwd(), '.env');
 dotenv.config({ path: envPath });
@@ -61,7 +61,9 @@ if (DB_MIGRATION_USERNAME === DB_USERNAME) {
 }
 
 const isSslEnabled = DB_SSL === 'true';
-const normalizedCa = DB_SSL_CA ? DB_SSL_CA.replace(/\\n/g, '\n') : undefined;
+const normalizedCa = DB_SSL_CA
+  ? DB_SSL_CA.replaceAll(String.raw`\n`, '\n')
+  : undefined;
 const sslConfig = isSslEnabled
   ? {
       rejectUnauthorized: true,

@@ -47,6 +47,7 @@ export class AuthController {
    */
   @Public()
   @Post('register')
+  @Throttle({ default: { limit: 3, ttl: 900000 } }) // 3 registros por 15 minutos
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
   @ApiResponse({
     status: 201,
@@ -102,6 +103,7 @@ export class AuthController {
   @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 600000 } }) // 3 intentos por 10 minutos
   @ApiOperation({ summary: 'Restablecer contraseña con token' })
   @ApiResponse({
     status: 200,
@@ -141,6 +143,7 @@ export class AuthController {
   )
   @Patch('change-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 intentos por 15 minutos
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Cambiar contraseña del usuario autenticado' })
   @ApiResponse({

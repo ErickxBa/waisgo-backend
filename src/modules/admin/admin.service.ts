@@ -25,6 +25,7 @@ import { ErrorMessages } from '../common/constants/error-messages.constant';
 import { buildIdWhere } from '../common/utils/public-id.util';
 import { parseDurationToSeconds } from '../common/utils/duration.util';
 import { RedisService } from 'src/redis/redis.service';
+import { StructuredLogger, SecurityEventType } from '../common/logger';
 
 export interface DocumentWithSignedUrl {
   id: string;
@@ -78,6 +79,7 @@ export class AdminService {
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
     private readonly businessService: BusinessService,
+    private readonly structuredLogger: StructuredLogger,
   ) {}
 
   /**
@@ -273,6 +275,14 @@ export class AdminService {
       // Enviar notificación al conductor
       await this.notifyDriverApproved(driver, authUser);
 
+      this.structuredLogger.logSuccess(
+        SecurityEventType.DRIVER_APPROVE,
+        'Driver approval',
+        adminUserId,
+        `driver:${driver.publicId}`,
+        { driverId, driverUserId: driver.userId },
+      );
+
       this.logger.log(`Driver approved: ${driverId} by admin ${adminUserId}`);
 
       return {
@@ -333,6 +343,14 @@ export class AdminService {
     // Enviar notificación al conductor
     await this.notifyDriverRejected(driver, motivo.trim());
 
+    this.structuredLogger.logSuccess(
+      SecurityEventType.DRIVER_REJECT,
+      'Driver rejection',
+      adminUserId,
+      `driver:${driver.publicId}`,
+      { driverId, motivo: motivo.substring(0, 50) },
+    );
+
     this.logger.log(`Driver rejected: ${driverId} by admin ${adminUserId}`);
 
     return {
@@ -384,6 +402,14 @@ export class AdminService {
       userAgent: context.userAgent,
       metadata: { driverId, driverUserId: driver.userId },
     });
+
+    this.structuredLogger.logSuccess(
+      SecurityEventType.DRIVER_SUSPEND,
+      'Driver suspension',
+      adminUserId,
+      `driver:${driver.publicId}`,
+      { driverId, driverUserId: driver.userId },
+    );
 
     this.logger.log(`Driver suspended: ${driverId} by admin ${adminUserId}`);
 

@@ -57,6 +57,12 @@ describe('BookingsService', () => {
   const configService = {
     get: jest.fn(),
   };
+  const structuredLogger = {
+    logSuccess: jest.fn(),
+    logFailure: jest.fn(),
+    logDenied: jest.fn(),
+    logCritical: jest.fn(),
+  };
 
   const context: AuthContext = { ip: '127.0.0.1', userAgent: 'jest' };
 
@@ -83,6 +89,7 @@ describe('BookingsService', () => {
       paymentsService as never,
       auditService as never,
       configService as never,
+      structuredLogger as never,
     );
   });
 

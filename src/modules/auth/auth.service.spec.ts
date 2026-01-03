@@ -76,6 +76,13 @@ describe('AuthService', () => {
     celular: '0999999999',
   };
 
+  const structuredLogger = {
+    logSuccess: jest.fn(),
+    logFailure: jest.fn(),
+    logDenied: jest.fn(),
+    logCritical: jest.fn(),
+  };
+
   let service: AuthService;
 
   beforeEach(() => {
@@ -91,9 +98,11 @@ describe('AuthService', () => {
       if (key === 'FRONTEND_URL') return 'http://frontend';
       return fallback ?? null;
     });
-    authUserRepo.create.mockImplementation((input: Record<string, unknown>) => ({
-      ...input,
-    }));
+    authUserRepo.create.mockImplementation(
+      (input: Record<string, unknown>) => ({
+        ...input,
+      }),
+    );
 
     service = new AuthService(
       authUserRepo as never,
@@ -103,6 +112,7 @@ describe('AuthService', () => {
       auditService as never,
       redisService as never,
       mailService as never,
+      structuredLogger as never,
     );
   });
 
@@ -187,9 +197,9 @@ describe('AuthService', () => {
   it('forgotPassword throws in dev when email is missing', async () => {
     authUserRepo.findOne.mockResolvedValue(null);
 
-    await expect(
-      service.forgotPassword('missing@epn.edu.ec'),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.forgotPassword('missing@epn.edu.ec')).rejects.toThrow(
+      NotFoundException,
+    );
 
     expect(auditService.logEvent).toHaveBeenCalled();
   });
@@ -295,9 +305,9 @@ describe('AuthService', () => {
     });
     redisService.get.mockResolvedValueOnce('3');
 
-    await expect(
-      service.forgotPassword('user@epn.edu.ec'),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(service.forgotPassword('user@epn.edu.ec')).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('forgotPassword clears old token and increments reset limit', async () => {
@@ -382,7 +392,10 @@ describe('AuthService', () => {
       'reset:token:d290f1ee-6c54-4b01-90e6-d701748f0851',
     );
     expect(redisService.del).toHaveBeenCalledWith('reset:active:user-id');
-    expect(redisService.revokeUserSessions).toHaveBeenCalledWith('user-id', 28800);
+    expect(redisService.revokeUserSessions).toHaveBeenCalledWith(
+      'user-id',
+      28800,
+    );
     expect(auditService.logEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: AuditAction.PASSWORD_RESET_COMPLETE,
@@ -398,7 +411,11 @@ describe('AuthService', () => {
     });
 
     expect(response).toEqual({ message: ErrorMessages.AUTH.LOGOUT_SUCCESS });
-    expect(redisService.set).toHaveBeenCalledWith('revoke:jti:jti-1', 'REVOKED', 120);
+    expect(redisService.set).toHaveBeenCalledWith(
+      'revoke:jti:jti-1',
+      'REVOKED',
+      120,
+    );
     expect(auditService.logEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: AuditAction.LOGOUT,
@@ -463,7 +480,10 @@ describe('AuthService', () => {
       message: ErrorMessages.AUTH.PASSWORD_CHANGE_SUCCESS,
     });
     expect(authUserRepo.save).toHaveBeenCalled();
-    expect(redisService.revokeUserSessions).toHaveBeenCalledWith('user-id', 28800);
+    expect(redisService.revokeUserSessions).toHaveBeenCalledWith(
+      'user-id',
+      28800,
+    );
     expect(auditService.logEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: AuditAction.PASSWORD_CHANGE,
