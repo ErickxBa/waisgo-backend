@@ -29,6 +29,25 @@ type AliasPrefix = 'Pasajero' | 'Conductor';
 
 @Injectable()
 export class BusinessService {
+  /**
+   * BusinessService - Responsabilidad Única: Gestión de Perfil/Datos de Usuario
+   * 
+   * Métodos Permitidos:
+   * - getMyProfile(): Retornar solo datos básicos del perfil (id, nombre, apellido, alias, avatar)
+   * - updateProfile(): Actualizar datos del perfil
+   * - updateProfilePhoto(): Gestionar foto de perfil
+   * - getDisplayName(): Obtener nombre para mostrar
+   * - findByUserId(): Obtener usuario por ID (uso interno)
+   * - findByPublicId(): Convertir publicId a UUID (uso interno)
+   * - createFromAuth(): Crear perfil desde registro
+   * - createFromAuthWithManager(): Crear perfil con transacción
+   * - softDeleteUser(): Eliminar cuenta (soporte)
+   * 
+   * NO debe hacer:
+   * - Gestionar autenticación o credenciales
+   * - Retornar email, celular, o datos sensibles en getMyProfile()
+   * - Manejar tokens o sesiones
+   */
   private readonly logger = new Logger(BusinessService.name);
   private readonly DEFAULT_REVOKE_TTL_SECONDS = 8 * 60 * 60;
   private readonly SOFT_DELETE_BLOCK_YEARS = 100;
@@ -327,11 +346,14 @@ export class BusinessService {
     });
   }
 
-  async findByPublicId(publicId: string): Promise<BusinessUser | null> {
-    return this.businessUserRepo.findOne({
+  async findByPublicId(publicId: string): Promise<{ id: string } | null> {
+    // SEGURIDAD: Solo retornar el ID necesario para conversión de publicId a UUID
+    const user = await this.businessUserRepo.findOne({
       where: { publicId, isDeleted: false },
-      relations: ['profile'],
+      select: ['id'],
     });
+    
+    return user;
   }
 
   async getMyProfile(userId: string) {
@@ -355,17 +377,13 @@ export class BusinessService {
         )
       : await this.getDefaultAvatarUrl();
 
+    // SEGURIDAD: Retornar solo datos necesarios para el perfil
     return {
       id: user.id,
-      publicId: user.publicId,
-      alias: user.alias,
-      email: user.email,
       nombre: user.profile.nombre,
       apellido: user.profile.apellido,
-      celular: user.profile.celular,
+      alias: user.alias,
       avatarUrl,
-      rating: user.profile.ratingPromedio,
-      totalViajes: user.profile.totalViajes,
     };
   }
 

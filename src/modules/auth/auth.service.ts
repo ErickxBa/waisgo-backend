@@ -32,6 +32,25 @@ import { BusinessService } from '../business/business.service';
 
 @Injectable()
 export class AuthService {
+  /**
+   * AuthService - Responsabilidad Única: Autenticación
+   * 
+   * Métodos Permitidos:
+   * - register(): Crear cuenta y generar credenciales
+   * - login(): Validar credenciales y emitir token
+   * - logout(): Revocar sesión
+   * - changePassword(): Cambiar contraseña del usuario
+   * - forgotPassword(): Iniciar flujo de recuperación
+   * - resetPassword(): Completar recuperación de contraseña
+   * - findForVerification(): Encontrar usuario para verificación (soporte)
+   * - verifyUser(): Marcar usuario como verificado (soporte)
+   * - getAdminEmails(): Obtener correos de admins (soporte para notificaciones)
+   * 
+   * NO debe hacer:
+   * - Gestionar perfil del usuario
+   * - Exponer datos sensibles (email, nombre, teléfono, etc.)
+   * - Gestionar fotografías o almacenamiento
+   */
   private readonly logger = new Logger(AuthService.name);
   private readonly secretKey: Uint8Array;
   private readonly JWT_EXPIRES_IN: string;
@@ -158,16 +177,11 @@ export class AuthService {
 
       this.logger.log(`User registered: ${userId}`);
 
+      // SEGURIDAD: Retornar solo el publicId (para verificación), sin información sensible del usuario
       return {
         success: true,
-        user: {
-          id: businessIdentity.publicId,
-          email: normalizedEmail,
-          nombre,
-          apellido,
-          celular,
-          alias: businessIdentity.alias,
-        },
+        publicId: businessIdentity.publicId,
+        message: 'Usuario registrado exitosamente. Verifica tu correo para completar el registro.',
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -267,26 +281,13 @@ export class AuthService {
         { email: user.email, role: user.rol, ip: context?.ip },
       );
 
-      // Obtener datos del usuario desde BusinessUser
-      const businessUser = await this.businessUserRepo.findOne({
-        where: { id: user.id },
-        relations: ['profile'],
-      });
-
+      // SEGURIDAD: Retornar solo token e id (necesario para identificar al usuario)
+      // Sin exponer email, nombre, celular, alias, foto u otros datos sensibles
       return {
         access_token: token,
         expiresIn: 28800, // 8h en segundos
         user: {
-          id: businessUser?.publicId || user.id,
-          email: user.email,
-          nombre: businessUser?.profile?.nombre || '',
-          apellido: businessUser?.profile?.apellido || '',
-          celular: businessUser?.profile?.celular || '',
-          alias: businessUser?.alias || '',
-          rol: user.rol,
-          estadoVerificacion: user.estadoVerificacion,
-          foto: businessUser?.profile?.fotoPerfilUrl,
-          createdAt: user.createdAt?.toISOString(),
+          id: user.id,
         },
       };
     } catch (error) {
