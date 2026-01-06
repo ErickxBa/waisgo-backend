@@ -4,8 +4,8 @@ import { Type } from 'class-transformer';
 
 export class SearchRoutesDto {
   @ApiProperty({
-    description: 'Latitud de la ubicación del pasajero',
-    example: -12.0464,
+    description: 'Latitud de la ubicación del pasajero (Quito: -0.18 a -0.35)',
+    example: -0.2102,
   })
   @IsNumber()
   @Min(-90)
@@ -14,8 +14,9 @@ export class SearchRoutesDto {
   lat: number;
 
   @ApiProperty({
-    description: 'Longitud de la ubicación del pasajero',
-    example: -77.0428,
+    description:
+      'Longitud de la ubicación del pasajero (Quito: -78.45 a -78.55)',
+    example: -78.4896,
   })
   @IsNumber()
   @Min(-180)

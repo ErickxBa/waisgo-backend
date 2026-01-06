@@ -31,8 +31,9 @@ export class CreateBookingDto {
   metodoPago: MetodoPagoEnum;
 
   @ApiPropertyOptional({
-    description: 'Latitud del punto de recogida (si aplica stop intermedio)',
-    example: -12.0464,
+    description:
+      'Latitud del punto de recogida (si aplica stop intermedio) - Quito',
+    example: -0.2102,
   })
   @IsOptional()
   @IsNumber()
@@ -41,8 +42,9 @@ export class CreateBookingDto {
   pickupLat?: number;
 
   @ApiPropertyOptional({
-    description: 'Longitud del punto de recogida (si aplica stop intermedio)',
-    example: -77.0428,
+    description:
+      'Longitud del punto de recogida (si aplica stop intermedio) - Quito',
+    example: -78.4896,
   })
   @IsOptional()
   @IsNumber()
@@ -52,7 +54,7 @@ export class CreateBookingDto {
 
   @ApiPropertyOptional({
     description: 'Dirección del punto de recogida',
-    example: 'Av. Universitaria 1234',
+    example: 'Av. 10 de Agosto 123, Quito',
   })
   @IsOptional()
   pickupDireccion?: string;
