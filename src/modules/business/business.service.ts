@@ -29,25 +29,7 @@ type AliasPrefix = 'Pasajero' | 'Conductor';
 
 @Injectable()
 export class BusinessService {
-  /**
-   * BusinessService - Responsabilidad Única: Gestión de Perfil/Datos de Usuario
-   * 
-   * Métodos Permitidos:
-   * - getMyProfile(): Retornar solo datos básicos del perfil (id, nombre, apellido, alias, avatar)
-   * - updateProfile(): Actualizar datos del perfil
-   * - updateProfilePhoto(): Gestionar foto de perfil
-   * - getDisplayName(): Obtener nombre para mostrar
-   * - findByUserId(): Obtener usuario por ID (uso interno)
-   * - findByPublicId(): Convertir publicId a UUID (uso interno)
-   * - createFromAuth(): Crear perfil desde registro
-   * - createFromAuthWithManager(): Crear perfil con transacción
-   * - softDeleteUser(): Eliminar cuenta (soporte)
-   * 
-   * NO debe hacer:
-   * - Gestionar autenticación o credenciales
-   * - Retornar email, celular, o datos sensibles en getMyProfile()
-   * - Manejar tokens o sesiones
-   */
+
   private readonly logger = new Logger(BusinessService.name);
   private readonly DEFAULT_REVOKE_TTL_SECONDS = 8 * 60 * 60;
   private readonly SOFT_DELETE_BLOCK_YEARS = 100;
