@@ -92,3 +92,5 @@ TODO.md
 *.kubeconfig.*
 .envrc
 .npmrc
+
+COORDENADAS_QUITO_EJEMPLOS.md
