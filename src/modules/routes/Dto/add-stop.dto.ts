@@ -3,8 +3,8 @@ import { IsNumber, IsString, Min, Max, MaxLength } from 'class-validator';
 
 export class AddStopDto {
   @ApiProperty({
-    description: 'Latitud del nuevo punto',
-    example: -12.0464,
+    description: 'Latitud del nuevo punto (Quito: -0.18 a -0.35)',
+    example: -0.2102,
   })
   @IsNumber()
   @Min(-90)
@@ -12,8 +12,8 @@ export class AddStopDto {
   lat: number;
 
   @ApiProperty({
-    description: 'Longitud del nuevo punto',
-    example: -77.0428,
+    description: 'Longitud del nuevo punto (Quito: -78.45 a -78.55)',
+    example: -78.4896,
   })
   @IsNumber()
   @Min(-180)
@@ -22,7 +22,7 @@ export class AddStopDto {
 
   @ApiProperty({
     description: 'Dirección del punto',
-    example: 'Av. La Marina 2050',
+    example: 'Av. 6 de Diciembre y Orellana, Quito',
   })
   @IsString()
   @MaxLength(255)

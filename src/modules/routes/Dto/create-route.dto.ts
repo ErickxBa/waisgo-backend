@@ -20,16 +20,16 @@ import { ErrorMessages } from '../../common/constants/error-messages.constant';
 
 export class RouteStopDto {
   @ApiProperty({
-    description: 'Latitud del punto',
-    example: -12.0464,
+    description: 'Latitud del punto (Quito: -0.18 a -0.35)',
+    example: -0.2102,
   })
   @Min(-90)
   @Max(90)
   lat: number;
 
   @ApiProperty({
-    description: 'Longitud del punto',
-    example: -77.0428,
+    description: 'Longitud del punto (Quito: -78.45 a -78.55)',
+    example: -78.4896,
   })
   @Min(-180)
   @Max(180)
@@ -37,7 +37,7 @@ export class RouteStopDto {
 
   @ApiProperty({
     description: 'Dirección legible del punto',
-    example: 'Av. Universitaria 1234',
+    example: 'Av. 10 de Agosto y Patria, Quito',
   })
   @IsString()
   @MaxLength(255)
